@@ -8,6 +8,7 @@
     <style type="text/css">
       body {
         font-family: consolas;
+        overflow: hidden;
       }
 
       #focus {
@@ -84,7 +85,6 @@
         '<canvas id="confettiCanvas"></canvas>';
       var confettiElement = document.getElementById("confettiCanvas");
       var confettiSettings = { target: confettiElement };
-      var confetti = new ConfettiGenerator(confettiSettings);
 
       var timer = document.getElementById("timer");
       var isPaused = false;
@@ -102,11 +102,11 @@
         if (!isPaused) {
           isPaused = true;
           document.getElementById("pauseTime").src = "pause.png";
+          clearConfetti();
         } else {
           isPaused = false;
           document.getElementById("pauseTime").src = "start.png";
           startTimer();
-          clearConfetti();
         }
       }
 
@@ -145,11 +145,13 @@
         return sec;
       }
 
+      function startConfetti() {
+        confetti = new ConfettiGenerator(confettiSettings);
+        confetti.render();
+      }
+
       function clearConfetti() {
         confetti.clear();
-      }
-      function startConfetti() {
-        confetti.render();
       }
     </script>
     <!--------------------------------------------------------------------------------------->
