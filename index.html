@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clock</title>
+    <style type="text/css">
+      body {
+        font-family: consolas;
+      }
+
+      #focus {
+        font-size: 20px;
+        padding: 32px;
+        background-color: #f4f4f4;
+        border-radius: 16px;
+      }
+
+      #box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 95vh;
+      }
+
+      #timer {
+        font-size: 48px;
+      }
+
+      #pauseTime {
+        cursor: pointer;
+      }
+
+      #confettiCanvas,
+      #userInput,
+      #button {
+        position: absolute;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- the html for timer 😀 ------------------------------------------------------------>
+    <div id="confetti"></div>
+    <div id="box">
+      <div id="focus">
+        Focus for:
+        <table>
+          <tr>
+            <td><div id="timer"></div></td>
+            <td>
+              <img
+                id="pauseTime"
+                src="start.png"
+                style="width: 48px; height: 48px; transform: translate(0, 5px)"
+                onclick="pauseTime()"
+              />
+            </td>
+          </tr>
+        </table>
+
+        <input
+          id="userInput"
+          type="number"
+          maxlength="4"
+          placeholder="seconds"
+          min="0"
+          max="10000"
+        />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button
+          id="button"
+          onclick="setTimerForThisLong()"
+        >
+          Set Timer
+        </button>
+      </div>
+    </div>
+    <!--------------------------------------------------------------------------------------->
+
+    <script src="confetti.js"></script>
+
+    <!-- the script for timer 📜 ------------------------------------------------------------>
+    <script type="text/javascript">
+      document.getElementById("confetti").innerHTML =
+        '<canvas id="confettiCanvas"></canvas>';
+      var confettiElement = document.getElementById("confettiCanvas");
+      var confettiSettings = { target: confettiElement };
+      var confetti = new ConfettiGenerator(confettiSettings);
+
+      var timer = document.getElementById("timer");
+      var isPaused = false;
+      timer.innerHTML = 05 + ":" + 01;
+      startTimer();
+
+      function setTimerForThisLong() {
+        var input = document.getElementById("userInput").value;
+        if (input / 3601 < 1) {
+          timer.innerHTML = parseInt(input / 60) + ":" + (input % 60);
+        }
+      }
+
+      function pauseTime() {
+        if (!isPaused) {
+          isPaused = true;
+          document.getElementById("pauseTime").src = "pause.png";
+        } else {
+          isPaused = false;
+          document.getElementById("pauseTime").src = "start.png";
+          startTimer();
+          clearConfetti();
+        }
+      }
+
+      function startTimer() {
+        if (isPaused) return;
+        var presentTime = timer.innerHTML;
+
+        // console.log(presentTime);
+        if (presentTime === "0:00") {
+          console.log("yes");
+          startConfetti();
+        }
+
+        var timeArray = presentTime.split(/[:]+/);
+        var m = timeArray[0];
+        var s = checkSecond(timeArray[1] - 1);
+        if (s == 59) {
+          m = m - 1;
+        }
+        if (m < 0) {
+          return;
+        }
+
+        timer.innerHTML = m + ":" + s;
+        console.log(m);
+        setTimeout(startTimer, 1000);
+      }
+
+      function checkSecond(sec) {
+        if (sec < 10 && sec >= 0) {
+          sec = "0" + sec;
+        } // add zero in front of numbers < 10
+        if (sec < 0) {
+          sec = "59";
+        }
+        return sec;
+      }
+
+      function clearConfetti() {
+        confetti.clear();
+      }
+      function startConfetti() {
+        confetti.render();
+      }
+    </script>
+    <!--------------------------------------------------------------------------------------->
+  </body>
+</html>
