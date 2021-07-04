@@ -11,18 +11,24 @@
         overflow: hidden;
       }
 
-      #focus {
+      .focus {
         font-size: 20px;
         padding: 16px;
         background-color: #f4f4f4;
         border-radius: 16px;
       }
 
-      #box {
+      .box {
         display: flex;
         align-items: center;
         justify-content: center;
         min-height: 95vh;
+      }
+
+      #table {
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
 
       #timer {
@@ -42,47 +48,86 @@
   </head>
   <body>
     <!-- the html for timer 😀 ------------------------------------------------------------>
-    <div id="confetti"></div>
-    <div id="box">
-      <div id="focus">
-        Focus for:
-        <table>
-          <tr>
-            <td><div id="timer"></div></td>
-            <td>
-              <img
-                id="pauseTime"
-                src="start.png"
-                style="width: 48px; height: 48px; transform: translate(0, 5px)"
-                onclick="pauseTime()"
-              />
-            </td>
-          </tr>
-        </table>
-
-        <input
-          id="userInput"
-          type="number"
-          maxlength="4"
-          placeholder="seconds"
-          min="0"
-          max="10000"
-        />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button
-          id="button"
-          onclick="setTimerForThisLong()"
-        >
-          Set Timer
-        </button>
-      </div>
-    </div>
+    <table id="table">
+      <tr>
+        <td>
+          <div id="confetti"></div>
+          <div class="box">
+            <div class="focus">
+              Focus for:
+              <table>
+                <tr>
+                  <td><div id="timer"></div></td>
+                  <td>
+                    <img
+                      id="pauseTime"
+                      src="start.png"
+                      style="
+                        width: 48px;
+                        height: 48px;
+                        transform: translate(0, 5px);
+                      "
+                      onclick="pauseTime()"
+                    />
+                  </td>
+                </tr>
+              </table>
+              <input
+                id="userInput"
+                type="number"
+                maxlength="4"
+                placeholder="seconds"
+                min="0"
+                max="10000"
+              />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button
+                id="button"
+                onclick="setTimerForThisLong()"
+              >
+                Set Timer
+              </button>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="box">
+            <div class="focus">
+              Week:<br />
+              <section
+                id="evalBarWhite"
+                style="
+                  width: 100px;
+                  height: 6px;
+                  background-color: rgb(51, 191, 196);
+                "
+              ></section>
+              <section
+                id="evalBarBlack"
+                style="
+                  width: 50px;
+                  height: 6px;
+                  background-color: black;
+                  transform: translate(0, -6px);
+                "
+              ></section>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </table>
     <!--------------------------------------------------------------------------------------->
+
+    <script type="text/javascript">
+      var d = new Date();
+      var number = (d.getDay() + d.getHours() / 24)/7*100;
+      document.getElementById("evalBarBlack").style.width = number + "px";
+    </script>
 
     <script src="confetti.js"></script>
 
     <!-- the script for timer 📜 ------------------------------------------------------------>
     <script type="text/javascript">
       document.getElementById("confetti").innerHTML =
-        '<canvas id="confettiCanvas"></canvas>';
+        '<canvas id="confettiCanvas"></canvas>'; // gets the confetti tag element and sets the inner html
       var confettiElement = document.getElementById("confettiCanvas");
       var confettiSettings = { target: confettiElement };
 
