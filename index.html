@@ -47,11 +47,11 @@
     </style>
   </head>
   <body>
+    <div id="confetti"></div>
     <!-- the html for timer 😀 ------------------------------------------------------------>
     <table id="table">
       <tr>
         <td>
-          <div id="confetti"></div>
           <div class="box">
             <div class="focus">
               Focus for:
@@ -118,7 +118,7 @@
 
     <script type="text/javascript">
       var d = new Date();
-      var number = (d.getDay() + d.getHours() / 24)/7*100;
+      var number = ((d.getDay() + d.getHours() / 24) / 7) * 100;
       document.getElementById("evalBarBlack").style.width = number + "px";
     </script>
 
