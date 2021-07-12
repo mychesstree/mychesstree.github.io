@@ -51,100 +51,104 @@
     <!-- the html for timer 😀 ------------------------------------------------------------>
     <table id="table">
       <tr>
-        <td colspan="3">
-          <div style="text-align: center">
-            <h1 id="Date" style="font-family: consolas"></h1>
-          </div>
-          <script>
-            function updateTime() {
-              var options = {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false,
-              };
-              var prnDt =
-                "Today is " + new Date().toLocaleTimeString("en-us", options);
-              document.getElementById("Date").innerHTML = prnDt;
-              setTimeout(updateTime, 1000);
-            }
-            updateTime();
-          </script>
-        </td>
-      </tr>
-      <tr>
         <td>
           <div class="box">
-            <div class="focus">
-              Focus for:
+            <div class="focus" style="padding-left: 30px;padding-right: 30px;">
               <table>
                 <tr>
-                  <td><div id="timer"></div></td>
+                  <div style="text-align: center">
+                    <h2 id="Date" style="font-family: consolas;font: size 30px;"></h2>
+                  </div>
+                  <script>
+                    function updateTime() {
+                      var options = {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: false,
+                      };
+                      var prnDt =
+                        "Today is " +
+                        new Date().toLocaleTimeString("en-us", options);
+                      document.getElementById("Date").innerHTML = prnDt;
+                      setTimeout(updateTime, 1000);
+                    }
+                    updateTime();
+                  </script>
+                </tr>
+                <tr>
                   <td>
-                    <img
-                      id="pauseTime"
-                      src="start.png"
+                    Focus for:
+                    <table>
+                      <tr>
+                        <td><div id="timer"></div></td>
+                        <td>
+                          <img
+                            id="pauseTime"
+                            src="start.png"
+                            style="
+                              width: 48px;
+                              height: 48px;
+                              transform: translate(0, 5px);
+                            "
+                            onclick="pauseTime()"
+                          />
+                        </td>
+                      </tr>
+                    </table>
+                    <input
+                      id="userInput"
+                      type="number"
+                      maxlength="4"
+                      placeholder="seconds"
+                      min="0"
+                      max="10000"
+                    />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button
+                      id="button"
+                      onclick="setTimerForThisLong()"
+                    >
+                      Set Timer
+                    </button>
+                  </td>
+                  <td>&nbsp;&nbsp;&nbsp;</td>
+                  <td>
+                    Week:<br />
+                    <section
+                      id="evalBarWhite"
                       style="
-                        width: 48px;
-                        height: 48px;
-                        transform: translate(0, 5px);
+                        width: 100px;
+                        height: 6px;
+                        background-color: rgb(51, 191, 196);
                       "
-                      onclick="pauseTime()"
-                    />
+                    ></section>
+                    <section
+                      id="evalBarBlack"
+                      style="
+                        width: 50px;
+                        height: 6px;
+                        background-color: black;
+                        transform: translate(0, -6px);
+                      "
+                    ></section>
+                  </td>
+                  <td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
+                  <td>
+                    <iframe
+                      width="300"
+                      height="150"
+                      src="https://www.youtube.com/embed/videoseries?list=PLp321COBeBxWNRdSmeilsXyyEf5p1cZUT"
+                      title="YouTube video player"
+                      frameborder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowfullscreen
+                    ></iframe>
                   </td>
                 </tr>
               </table>
-              <input
-                id="userInput"
-                type="number"
-                maxlength="4"
-                placeholder="seconds"
-                min="0"
-                max="10000"
-              />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button
-                id="button"
-                onclick="setTimerForThisLong()"
-              >
-                Set Timer
-              </button>
-            </div>
-
-            <iframe
-              width="300"
-              height="150"
-              src="https://www.youtube.com/embed/videoseries?list=PLp321COBeBxWNRdSmeilsXyyEf5p1cZUT"
-              title="YouTube video player"
-              frameborder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowfullscreen
-            ></iframe>
-          </div>
-        </td>
-        <td>
-          <div class="box">
-            <div class="focus">
-              Week:<br />
-              <section
-                id="evalBarWhite"
-                style="
-                  width: 100px;
-                  height: 6px;
-                  background-color: rgb(51, 191, 196);
-                "
-              ></section>
-              <section
-                id="evalBarBlack"
-                style="
-                  width: 50px;
-                  height: 6px;
-                  background-color: black;
-                  transform: translate(0, -6px);
-                "
-              ></section>
             </div>
           </div>
         </td>
