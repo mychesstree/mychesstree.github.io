@@ -51,6 +51,32 @@
     <!-- the html for timer 😀 ------------------------------------------------------------>
     <table id="table">
       <tr>
+        <td colspan="3">
+          <div style="text-align: center">
+            <h1 id="Date" style="font-family: consolas"></h1>
+          </div>
+          <script>
+            function updateTime() {
+              var options = {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              };
+              var prnDt =
+                "Today is " + new Date().toLocaleTimeString("en-us", options);
+              document.getElementById("Date").innerHTML = prnDt;
+              setTimeout(updateTime, 1000);
+            }
+            updateTime();
+          </script>
+        </td>
+      </tr>
+      <tr>
         <td>
           <div class="box">
             <div class="focus">
@@ -86,6 +112,16 @@
                 Set Timer
               </button>
             </div>
+
+            <iframe
+              width="300"
+              height="150"
+              src="https://www.youtube.com/embed/videoseries?list=PLp321COBeBxWNRdSmeilsXyyEf5p1cZUT"
+              title="YouTube video player"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+            ></iframe>
           </div>
         </td>
         <td>
