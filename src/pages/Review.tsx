@@ -25,23 +25,29 @@ function calculateSM2(rating: number, oldInterval: number, oldRepetitions: numbe
   let repetitions = 0;
   let ease = oldEase;
 
-  if (rating >= 3) {
-    if (oldRepetitions === 0) {
-      interval = 1;
-    } else if (oldRepetitions === 1) {
-      interval = 6;
-    } else {
-      interval = Math.round(oldInterval * oldEase);
-    }
-    repetitions = oldRepetitions + 1;
+  // 1. Learning phase (first time graduating)
+  if (oldInterval === 0) {
+    if (rating === 3) interval = 1;      // Good (1 day)
+    else if (rating === 5) interval = 4; // Easy (4 days)
+    else interval = 1;
+    repetitions = 1;
   } else {
-    repetitions = 0;
-    interval = 1;
+    // 2. Review phase (graduated)
+    if (rating >= 3) {
+      // Bonus multiplier for Easy (5) to reach 16d from 4d
+      const bonus = rating === 5 ? 1.6 : 1.0;
+      interval = Math.max(oldInterval + 1, Math.round(oldInterval * oldEase * bonus));
+      repetitions = oldRepetitions + 1;
+    } else {
+      // Again/Hard back to learning
+      repetitions = 1;
+      interval = 1;
+    }
   }
 
+  // Standard SM-2 ease adjustment
   ease = oldEase + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02));
   if (ease < 1.3) ease = 1.3;
-
   return { interval, repetitions, ease };
 }
 
@@ -62,17 +68,22 @@ export default function Review() {
 
   const loadTreeAndGenerateCards = useCallback(async () => {
     if (!id) return;
-    const { data, error } = await supabase.from('trees').select('*').eq('id', id).single();
-    if (error || !data) {
-      console.error('Review load error:', error);
+    
+    // 1. Fetch metadata and tree data
+    const { data: tree, error: treeErr } = await supabase.from('trees').select('*').eq('id', id).single();
+    if (treeErr || !tree) {
       setLoading(false);
       return;
     }
+    setTreeMeta(tree);
 
-    setTreeMeta(data);
-    const tData = data.tree_data;
-    const cards: ReviewCard[] = [];
-    const isPlayerWhite = data.color === 'white';
+    // 2. Fetch existing reviews to determine what's due
+    const { data: reviews } = await supabase.from('reviews').select('fen, next_review_date').eq('tree_id', id);
+    const reviewMap = new Map(reviews?.map(r => [r.fen, new Date(r.next_review_date)]) || []);
+
+    const tData = tree.tree_data;
+    const allMatchingCards: ReviewCard[] = [];
+    const isPlayerWhite = tree.color === 'white';
 
     function traverse(node: TreeNode) {
       const chess = new Chess(node.fen);
@@ -80,12 +91,18 @@ export default function Review() {
       const isSideToMatch = isPlayerWhite ? isWhiteTurn : !isWhiteTurn;
 
       if (isSideToMatch && node.children && node.children.length > 0) {
-        cards.push({
-          fen: node.fen,
-          possibleMoves: node.children.map(c => c.move ?? '').filter((m): m is string => !!m),
-          mainMove: node.children[0].move ?? '',
-          treeId: id ?? ''
-        });
+        // FILTER: Only add if new OR due
+        const nextReview = reviewMap.get(node.fen);
+        const isDue = !nextReview || nextReview <= new Date();
+
+        if (isDue) {
+          allMatchingCards.push({
+            fen: node.fen,
+            possibleMoves: node.children.map(c => c.move ?? '').filter((m): m is string => !!m),
+            mainMove: node.children[0].move ?? '',
+            treeId: id ?? ''
+          });
+        }
       }
       
       if (node.children) {
@@ -94,7 +111,9 @@ export default function Review() {
     }
 
     if (tData) traverse(tData);
-    const shuffled = cards.sort(() => Math.random() - 0.5);
+    
+    // Shuffle the due cards
+    const shuffled = allMatchingCards.sort(() => Math.random() - 0.5);
     setFlashcards(shuffled);
     
     if (shuffled.length > 0) {
@@ -136,30 +155,67 @@ export default function Review() {
   };
 
   const submitRating = async (rating: number) => {
-    if (!treeMeta) return;
+    if (!treeMeta || !flashcards[currentIndex]) return;
     const card = flashcards[currentIndex];
-    const { data: existing } = await supabase.from('reviews').select('*').eq('tree_id', card.treeId).eq('fen', card.fen).single();
-
-    const oldInt = existing?.interval ?? 1;
-    const oldRep = existing?.repetitions ?? 0;
-    const oldEase = existing?.ease_factor ?? 2.5;
-
-    const { interval, repetitions, ease } = calculateSM2(rating, oldInt, oldRep, oldEase);
-    const nextReview = new Date();
-    nextReview.setDate(nextReview.getDate() + interval);
-
-    await supabase.from('reviews').upsert({
+    
+    // Always log history for accurate heatmap
+    await supabase.from('review_logs').insert({
       tree_id: card.treeId,
       user_id: treeMeta.user_id,
       fen: card.fen,
-      interval,
-      repetitions,
-      ease_factor: ease,
-      next_review_date: nextReview.toISOString()
+      rating
     });
+    if (rating === 1 || rating === 2) {
+      // "Again" (1) or "Hard" (2) -> Re-queue at the end of the session
+      handleSessionRequeue();
+    } else {
+      // "Medium" (3) or "Easy" (5) -> Graduate to Supabase (>= 1 day)
+      const { data: existing } = await supabase.from('reviews').select('*').eq('tree_id', card.treeId).eq('fen', card.fen).single();
+      const oldInt = existing?.interval ?? 0;
+      const oldRep = existing?.repetitions ?? 0;
+      const oldEase = existing?.ease_factor ?? 2.5;
 
-    nextCard();
+      const { interval, repetitions, ease } = calculateSM2(rating, oldInt, oldRep, oldEase);
+      const nextReview = new Date();
+      nextReview.setDate(nextReview.getDate() + interval);
+
+      await supabase.from('reviews').upsert({
+        tree_id: card.treeId,
+        user_id: treeMeta.user_id,
+        fen: card.fen,
+        interval,
+        repetitions,
+        ease_factor: ease,
+        next_review_date: nextReview.toISOString()
+      });
+
+      nextCard();
+    }
   };
+
+  const handleSessionRequeue = () => {
+    setFlashcards(prev => {
+      const next = [...prev];
+      const [removed] = next.splice(currentIndex, 1);
+      return [...next, removed];
+    });
+    // The card at currentIndex is now the "next" one in the original queue
+    // but the state needs to be refreshed
+    setRevealed(false);
+    setStatus('playing');
+    // We need to wait for state update to get the new flashcards[currentIndex]? 
+    // No, we can just use the next item in the array for the immediate UI update
+  };
+  
+  // Update UI when flashcards or currentIndex change
+  useEffect(() => {
+    if (flashcards[currentIndex]) {
+      const card = flashcards[currentIndex];
+      gameRef.current = new Chess(card.fen);
+      setCurrentFen(card.fen);
+      setExpectedMove(card.mainMove);
+    }
+  }, [currentIndex, flashcards]);
 
   const nextCard = () => {
     const nextIdx = currentIndex + 1;
@@ -261,14 +317,39 @@ export default function Review() {
                     {status === 'wrong' && <p className="text-muted text-sm">Correct move: <strong>{expectedMove}</strong></p>}
                   </div>
 
-                  <div style={{ display:'flex', gap:'0.75rem', justifyContent:'center', width:'100%' }}>
+                  <div style={{ display:'flex', gap:'0.5rem', justifyContent:'center', width:'100%' }}>
                     {status === 'wrong' ? (
                       <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: 1 }}>RETRY</button>
                     ) : (
                       <>
-                        <button onClick={() => submitRating(1)} className="btn btn-secondary" style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', padding: '0.75rem 0.5rem' }}>HARD</button>
-                        <button onClick={() => submitRating(3)} className="btn" style={{ flex: 1, backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', padding: '0.75rem 0.5rem' }}>GOOD</button>
-                        <button onClick={() => submitRating(5)} className="btn btn-secondary" style={{ flex: 1, backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', padding: '0.75rem 0.5rem' }}>EASY</button>
+                        <button 
+                          onClick={() => submitRating(1)} 
+                          className="btn" 
+                          style={{ flex: 1, backgroundColor: 'rgba(219, 39, 119, 0.1)', color: '#ec4899', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                        >
+                          AGAIN<br/><span style={{ opacity: 0.6 }}>1m</span>
+                        </button>
+                        <button 
+                          onClick={() => submitRating(2)} 
+                          className="btn" 
+                          style={{ flex: 1, backgroundColor: 'rgba(219, 39, 119, 0.25)', color: '#fbcfe8', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                        >
+                          HARD<br/><span style={{ opacity: 0.8 }}>10m</span>
+                        </button>
+                        <button 
+                          onClick={() => submitRating(3)} 
+                          className="btn" 
+                          style={{ flex: 1, backgroundColor: 'rgba(219, 39, 119, 0.6)', color: 'white', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                        >
+                          GOOD<br/><span style={{ opacity: 0.9 }}>1d</span>
+                        </button>
+                        <button 
+                          onClick={() => submitRating(5)} 
+                          className="btn" 
+                          style={{ flex: 1, backgroundColor: '#9d174d', color: 'white', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                        >
+                          EASY<br/><span style={{ opacity: 0.9 }}>4d+</span>
+                        </button>
                       </>
                     )}
                   </div>

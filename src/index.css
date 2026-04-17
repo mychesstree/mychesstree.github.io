@@ -415,3 +415,74 @@ button {
   visibility: visible;
   transform: translateX(-50%) translateY(-4px);
 }
+
+/* Heatmap Theme Overrides (Ultra Soft) */
+.react-calendar-heatmap .color-empty { fill: rgba(255, 255, 255, 0.02); }
+
+/* Pinkscale (History) - Soft muted pink/maroon */
+.react-calendar-heatmap .color-pink-1 { fill: rgba(196, 126, 138, 0.15); }
+.react-calendar-heatmap .color-pink-2 { fill: rgba(196, 126, 138, 0.4); }
+.react-calendar-heatmap .color-pink-3 { fill: rgba(196, 126, 138, 0.7); }
+.react-calendar-heatmap .color-pink-4 { fill: rgba(196, 126, 138, 1); }
+
+/* Grayscale (Future) - Very subtle translucent grays */
+.react-calendar-heatmap .color-gray-1 { fill: rgba(107, 114, 128, 0.1); }
+.react-calendar-heatmap .color-gray-2 { fill: rgba(107, 114, 128, 0.25); }
+.react-calendar-heatmap .color-gray-3 { fill: rgba(107, 114, 128, 0.45); }
+.react-calendar-heatmap .color-gray-4 { fill: rgba(107, 114, 128, 0.65); }
+
+/* Today Indicator */
+.react-calendar-heatmap .color-today { 
+  stroke: var(--accent-color);
+  stroke-width: 1px;
+}
+
+.react-calendar-heatmap text {
+  font-size: 8px;
+  fill: var(--text-muted);
+}
+
+/* Repertoire Layout Utilities */
+.decks-scroll-container {
+  display: flex;
+  gap: 1.5rem;
+  padding-bottom: 1rem;
+}
+
+@media (min-width: 768px) {
+  .decks-scroll-container {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none; /* Hide for clean look */
+  }
+  .decks-scroll-container::-webkit-scrollbar {
+    display: none;
+  }
+  .decks-scroll-container > div {
+    flex: 0 0 320px; /* Fixed width for consistent alignment on desktop */
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 767px) {
+  .decks-scroll-container {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+}
+
+.heatmap-scroll-wrapper {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  margin-bottom: 2rem;
+  scrollbar-width: none;
+}
+
+.heatmap-scroll-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.heatmap-scroll-wrapper > div {
+  min-width: 750px; /* Ensures the calendar doesn't squish on mobile */
+}
