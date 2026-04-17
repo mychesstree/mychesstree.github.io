@@ -51,23 +51,6 @@ export default function TreeEditor() {
   // Arrows
   // const boardWrapperRef = useRef<HTMLDivElement>(null);
 
-  // Load Tree
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
-      const { data, error } = await supabase.from('trees').select('*').eq('id', id).single();
-      if (error) console.error('Load tree error:', error);
-      if (data) {
-        setTreeMeta(data);
-        const root: TreeNode = data.tree_data ?? { fen: new Chess().fen(), children: [] };
-        setTreeData(root);
-        gameRef.current = new Chess(root.fen);
-        setCurrentFen(root.fen);
-      }
-      setLoading(false);
-    })();
-  }, [id]);
-
   // ── Stockfish Local Worker ─────────────────────────────────────────────────
   useEffect(() => {
     let worker: Worker;
@@ -95,6 +78,23 @@ export default function TreeEditor() {
     return () => worker?.terminate();
   }, []);
 
+  // Load Tree
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      const { data, error } = await supabase.from('trees').select('*').eq('id', id).single();
+      if (error) console.error('Load tree error:', error);
+      if (data) {
+        setTreeMeta(data);
+        const root: TreeNode = data.tree_data ?? { fen: new Chess().fen(), children: [] };
+        setTreeData(root);
+        gameRef.current = new Chess(root.fen);
+        setCurrentFen(root.fen);
+      }
+      setLoading(false);
+    })();
+  }, [id]);
+
   useEffect(() => {
     const eng = engineRef.current;
     if (!eng) return;
@@ -105,7 +105,7 @@ export default function TreeEditor() {
   }, [currentFen]);
 
   const onPieceDrop = useCallback(
-    (sourceSquare: string, targetSquare: string) => {
+    ({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string }) => {
       const prevFen = gameRef.current.fen();
       let moveObj: any = null;
       try {
@@ -255,7 +255,7 @@ export default function TreeEditor() {
                     pieces: calientePieces,
                     darkSquareStyle: boardStyles.darkSquareStyle,
                     lightSquareStyle: boardStyles.lightSquareStyle,
-                    arrows,
+                    arrows: arrows,
                     boardStyle: boardStyles.boardStyle,
                   }}
                 />;

@@ -157,6 +157,9 @@ button {
   justify-content: space-between;
   padding: 0 2rem;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
 .app-header-brand {

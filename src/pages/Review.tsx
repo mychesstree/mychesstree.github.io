@@ -110,7 +110,7 @@ export default function Review() {
     loadTreeAndGenerateCards();
   }, [loadTreeAndGenerateCards]);
 
-  const onDrop = (sourceSquare: string, targetSquare: string) => {
+  const onDrop = ({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string }) => {
     if (status !== 'playing') return false;
     try {
       const moveObj = gameRef.current.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
