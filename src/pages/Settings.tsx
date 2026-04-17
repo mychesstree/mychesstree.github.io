@@ -46,7 +46,7 @@ export default function Settings() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <Row icon={<Mail size={16} />} label="Email" value={user?.email ?? '—'} />
-          <Row icon={<Shield size={16} />} label="User ID" value={user?.id?.slice(0, 16) + '…' ?? '—'} mono />
+          <Row icon={<Shield size={16} />} label="User ID" value={user?.id ? user.id.slice(0, 16) + '…' : '—'} mono />
           <Row icon={<User size={16} />} label="Opening Trees" value={treesCount !== null ? String(treesCount) : '…'} />
         </div>
       </div>

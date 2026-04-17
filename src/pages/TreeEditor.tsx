@@ -6,32 +6,7 @@ import { supabase } from '../lib/supabase';
 import ForceTree, { type TreeNode } from '../components/ForceTree';
 import { useChessboardArrows } from '../hooks/useChessboardArrows';
 import { ArrowLeft, Save, RotateCcw, Undo2, Info, HelpCircle, X, ChevronRight, Play } from 'lucide-react';
-
-// ── Caliente SVG piece imports ────────────────────────────────────────────────
-import bbSrc from '../assets/caliente/bb.svg';
-import bwSrc from '../assets/caliente/bw.svg';
-import kbSrc from '../assets/caliente/kb.svg';
-import kwSrc from '../assets/caliente/kw.svg';
-import nbSrc from '../assets/caliente/nb.svg';
-import nwSrc from '../assets/caliente/nw.svg';
-import pbSrc from '../assets/caliente/pb.svg';
-import pwSrc from '../assets/caliente/pw.svg';
-import qbSrc from '../assets/caliente/qb.svg';
-import qwSrc from '../assets/caliente/qw.svg';
-import rbSrc from '../assets/caliente/rb.svg';
-import rwSrc from '../assets/caliente/rw.svg';
-
-const pieceMap: Record<string, string> = {
-  wP: pwSrc, wN: nwSrc, wB: bwSrc, wR: rwSrc, wQ: qwSrc, wK: kwSrc,
-  bP: pbSrc, bN: nbSrc, bB: bbSrc, bR: rbSrc, bQ: qbSrc, bK: kbSrc,
-};
-
-const pieces = Object.fromEntries(
-  Object.entries(pieceMap).map(([key, src]) => [
-    key,
-    () => <img src={src} alt={key} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />,
-  ])
-);
+import { calientePieces, boardStyles } from '../lib/chessAssets';
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
 function uciToArrow(uci: string) {
@@ -108,6 +83,7 @@ export default function TreeEditor() {
         if (cpM) setEvalNum(parseInt(cpM[1]) / 100);
         const mateM = line.match(/score mate (-?\d+)/);
         if (mateM) setEvalNum(parseInt(mateM[1]) > 0 ? 100 : -100);
+
         const bmM = line.match(/^bestmove ([a-h][1-8][a-h][1-8])/);
         if (bmM) setBestMove(bmM[1]);
       };
@@ -131,8 +107,7 @@ export default function TreeEditor() {
   }, [currentFen]);
 
   const onPieceDrop = useCallback(
-    ({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string | null }) => {
-      if (!targetSquare) return false;
+    (sourceSquare: string, targetSquare: string) => {
       const prevFen = gameRef.current.fen();
       let moveObj: any = null;
       try {
@@ -279,11 +254,11 @@ export default function TreeEditor() {
                     position: currentFen,
                     onPieceDrop,
                     boardOrientation,
-                    pieces,
-                    darkSquareStyle: { backgroundColor: '#c47e8a' },
-                    lightSquareStyle: { backgroundColor: '#f5ece9' },
+                    pieces: calientePieces,
+                    darkSquareStyle: boardStyles.darkSquareStyle,
+                    lightSquareStyle: boardStyles.lightSquareStyle,
                     arrows,
-                    boardStyle: { borderRadius: '4px', boxShadow: '0 8px 30px rgba(0,0,0,0.5)' },
+                    boardStyle: boardStyles.boardStyle,
                   }}
                 />;
               })()}

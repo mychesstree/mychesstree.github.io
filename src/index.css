@@ -250,7 +250,7 @@ button {
   flex: 1;
   position: relative;
   background-color: var(--panel-bg);
-  overflow: hidden;
+  overflow: auto;
   min-height: 300px;
 }
 
