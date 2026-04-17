@@ -12,7 +12,6 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.103.3",
     "chess.js": "^1.4.0",
-    "chessboard-arrows": "^1.0.2",
     "d3": "^7.9.0",
     "lucide-react": "^1.8.0",
     "react": "^19.2.4",

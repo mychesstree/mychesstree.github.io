@@ -4,7 +4,6 @@ import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import ForceTree, { type TreeNode } from '../components/ForceTree';
-import { useChessboardArrows } from '../hooks/useChessboardArrows';
 import { ArrowLeft, Save, RotateCcw, Undo2, Info, HelpCircle, X, ChevronRight, Play } from 'lucide-react';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 
@@ -50,8 +49,7 @@ export default function TreeEditor() {
   const [bestMove, setBestMove] = useState('');
 
   // Arrows
-  const boardWrapperRef = useRef<HTMLDivElement>(null);
-  useChessboardArrows(boardWrapperRef, 'rgba(225,29,72,0.85)');
+  // const boardWrapperRef = useRef<HTMLDivElement>(null);
 
   // Load Tree
   useEffect(() => {
@@ -174,7 +172,7 @@ export default function TreeEditor() {
   const boardOrientation: 'white' | 'black' = treeMeta?.color === 'black' ? 'black' : 'white';
 
   if (loading) return (
-    <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'60vh', color:'var(--text-muted)' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'var(--text-muted)' }}>
       Loading tree…
     </div>
   );
@@ -182,7 +180,7 @@ export default function TreeEditor() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 2.5rem)', gap: '1rem' }}>
-      
+
       {/* Tutorial Overlay */}
       {showTutorial && (
         <div style={{
@@ -191,14 +189,14 @@ export default function TreeEditor() {
           alignItems: 'center', justifyContent: 'center', padding: '1rem'
         }}>
           <div className="card animate-fade-in" style={{ maxWidth: 500, width: '100%', position: 'relative' }}>
-            <button onClick={() => setShowTutorial(false)} style={{ position: 'absolute', top: 12, right: 12, background:'none', border:'none', color:'var(--text-muted)' }}>
+            <button onClick={() => setShowTutorial(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
               <X size={24} />
             </button>
-            <h2 style={{ marginBottom: '1.5rem', display:'flex', alignItems:'center', gap: '0.5rem' }}>
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <HelpCircle size={24} color="var(--accent-color)" />
               How to use MyChessTree
             </h2>
-            <div style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <TutorialStep icon={<Play size={18} />} title="Build Your Tree" text="Make moves on the board to add them to your tree. New moves appear in yellow until saved." />
               <TutorialStep icon={<Save size={18} />} title="Save Your Progress" text="Click 'Save' to commit your new moves to Supabase. This makes them permanent." />
               <TutorialStep icon={<ChevronRight size={18} />} title="Analyze with Engine" text="Stockfish runs in your browser. The eval bar and red arrows show the best engine moves." />
@@ -241,12 +239,12 @@ export default function TreeEditor() {
 
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'stretch' }}>
             {/* Eval Bar */}
-            <div style={{ width: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: '#111', display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
+            <div style={{ width: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: '#111', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
               <div style={{ width: '100%', height: `${whitePercent}%`, backgroundColor: '#f5f5f5', transition: 'height 0.4s ease' }} />
             </div>
 
             {/* Board */}
-            <div ref={boardWrapperRef} style={{ flex: 1 }}>
+            <div style={{ flex: 1 }}>
               {(() => {
                 const Board = Chessboard as any;
                 return <Board
