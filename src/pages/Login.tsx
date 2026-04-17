@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { BrainCircuit } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -18,7 +18,19 @@ export default function Login() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
+        // Validation: Username alphanumeric 3-10 characters
+        const usernameRegex = /^[a-zA-Z0-9]{3,10}$/;
+        if (!usernameRegex.test(username)) {
+          throw new Error('Username must be alphanumeric and 3-10 characters long.');
+        }
+
+        const { error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            data: { username }
+          }
+        });
         if (error) throw error;
         alert('Check your email for the confirmation link!');
       } else {
@@ -37,7 +49,7 @@ export default function Login() {
     <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: 'var(--bg-color)' }}>
       <div className="card" style={{ maxWidth: '400px', width: '100%', margin: '2rem' }}>
         <div className="flex flex-col items-center mb-6">
-          <BrainCircuit size={48} style={{ color: 'var(--accent-color)' }} />
+          <img src="/logo.svg" alt="MyChessTree Logo" style={{ height: 64, width: 'auto', marginBottom: '1rem' }} />
           <h1 className="mt-4" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
             {isSignUp ? 'Create an Account' : 'Welcome Back'}
           </h1>
@@ -63,6 +75,19 @@ export default function Login() {
               required 
             />
           </div>
+          {isSignUp && (
+            <div className="input-group">
+              <label>Username</label>
+              <input 
+                type="text" 
+                className="input" 
+                placeholder="3-10 characters (alphanumeric)"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                required 
+              />
+            </div>
+          )}
           <div className="input-group">
             <label>Password</label>
             <input 

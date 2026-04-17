@@ -317,38 +317,68 @@ export default function Review() {
                     {status === 'wrong' && <p className="text-muted text-sm">Correct move: <strong>{expectedMove}</strong></p>}
                   </div>
 
-                  <div style={{ display:'flex', gap:'0.5rem', justifyContent:'center', width:'100%' }}>
+                  <div style={{ 
+                    display:'flex', 
+                    gap:'1rem', 
+                    justifyContent:'center', 
+                    width:'100%', 
+                    flexWrap: 'wrap' 
+                  }}>
                     {status === 'wrong' ? (
-                      <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: 1 }}>RETRY</button>
+                      <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: '1 1 100%', padding: '1rem' }}>RETRY</button>
                     ) : (
                       <>
                         <button 
                           onClick={() => submitRating(1)} 
                           className="btn" 
-                          style={{ flex: 1, backgroundColor: 'rgba(219, 39, 119, 0.1)', color: '#ec4899', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                          style={{ 
+                            flex: '1 1 140px', 
+                            backgroundColor: 'rgba(219, 39, 119, 0.1)', 
+                            color: '#ec4899', 
+                            padding: '1rem', 
+                            fontSize: '0.85rem' 
+                          }}
                         >
-                          AGAIN<br/><span style={{ opacity: 0.6 }}>1m</span>
+                          AGAIN<br/><span style={{ opacity: 0.6, fontSize: '0.75rem' }}>1m</span>
                         </button>
                         <button 
                           onClick={() => submitRating(2)} 
                           className="btn" 
-                          style={{ flex: 1, backgroundColor: 'rgba(219, 39, 119, 0.25)', color: '#fbcfe8', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                          style={{ 
+                            flex: '1 1 140px', 
+                            backgroundColor: 'rgba(219, 39, 119, 0.25)', 
+                            color: '#fbcfe8', 
+                            padding: '1rem', 
+                            fontSize: '0.85rem' 
+                          }}
                         >
-                          HARD<br/><span style={{ opacity: 0.8 }}>10m</span>
+                          HARD<br/><span style={{ opacity: 0.8, fontSize: '0.75rem' }}>10m</span>
                         </button>
                         <button 
                           onClick={() => submitRating(3)} 
                           className="btn" 
-                          style={{ flex: 1, backgroundColor: 'rgba(219, 39, 119, 0.6)', color: 'white', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                          style={{ 
+                            flex: '1 1 140px', 
+                            backgroundColor: 'rgba(219, 39, 119, 0.6)', 
+                            color: 'white', 
+                            padding: '1rem', 
+                            fontSize: '0.85rem' 
+                          }}
                         >
-                          GOOD<br/><span style={{ opacity: 0.9 }}>1d</span>
+                          GOOD<br/><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>1d</span>
                         </button>
                         <button 
                           onClick={() => submitRating(5)} 
                           className="btn" 
-                          style={{ flex: 1, backgroundColor: '#9d174d', color: 'white', padding: '0.75rem 0.25rem', fontSize: '0.7rem' }}
+                          style={{ 
+                            flex: '1 1 140px', 
+                            backgroundColor: '#9d174d', 
+                            color: 'white', 
+                            padding: '1rem', 
+                            fontSize: '0.85rem' 
+                          }}
                         >
-                          EASY<br/><span style={{ opacity: 0.9 }}>4d+</span>
+                          EASY<br/><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>4d+</span>
                         </button>
                       </>
                     )}

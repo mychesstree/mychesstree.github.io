@@ -72,10 +72,10 @@ export default function ForceTree({ data, currentFen, onNodeClick }: ForceTreePr
     const containerWidth = containerRef.current.clientWidth || 600;
     const height = containerRef.current.clientHeight || 500;
     const maxDepth = Math.max(1, ...nodes.map(n => n.depth));
-    
+
     // Widen the horizontal space: at least 200px per depth
     const totalWidth = Math.max(containerWidth, (maxDepth + 1) * 200);
-    
+
     const svg = d3.select(el)
       .attr('width', totalWidth)
       .attr('height', height);
@@ -111,9 +111,10 @@ export default function ForceTree({ data, currentFen, onNodeClick }: ForceTreePr
       .attr('stroke', (d: any) => d.onPath ? 'white' : 'var(--accent-color)')
       .attr('stroke-width', (d: any) => d.onPath ? 3 : 2);
 
-    node.append('text').text((d: any) => d.move ?? '').attr('dx', 15).attr('dy', 5)
+    node.append('text').text((d: any) => d.move ?? '').attr('dx', 0).attr('dy', -20)
+      .attr('text-anchor', 'middle')
       .attr('font-size', 12).attr('font-weight', (d: any) => d.onPath ? 'bold' : 'normal')
-      .attr('fill', (d: any) => d.onPath ? 'white' : 'var(--text-muted)').attr('pointer-events', 'none');
+      .attr('fill', '#fda4af').attr('pointer-events', 'none');
 
     node.call(d3.drag<SVGGElement, any>()
       .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })

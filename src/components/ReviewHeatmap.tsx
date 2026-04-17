@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+// @ts-ignore
 import CalendarHeatmap from 'react-calendar-heatmap';
 
 // Base styles for the library (usually imported from the node_module)
@@ -53,7 +54,7 @@ export default function ReviewHeatmap() {
           values={heatmapValues}
           showWeekdayLabels={false}
           showMonthLabels={false}
-          classForValue={(value) => {
+          classForValue={(value: any) => {
             if (!value || value.count === 0) {
               return value?.date === todayStr ? 'color-empty color-today' : 'color-empty';
             }
@@ -64,7 +65,7 @@ export default function ReviewHeatmap() {
             const baseClass = isFuture ? `color-gray-${level}` : `color-pink-${level}`;
             return value.date === todayStr ? `${baseClass} color-today` : baseClass;
           }}
-          titleForValue={(value) => {
+          titleForValue={(value: any) => {
             if (!value) return 'No reviews';
             return `${value.date}: ${value.count} cards`;
           }}

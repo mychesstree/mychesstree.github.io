@@ -211,8 +211,15 @@ export default function TreeEditor() {
             <span className="text-sm text-muted">Playing as {treeMeta.color}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <button onClick={() => setShowTutorial(true)} className="btn btn-secondary btn-icon" title="Tutorial"><HelpCircle size={20} /></button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
+          <button 
+            onClick={() => setShowTutorial(true)} 
+            className="btn btn-secondary" 
+            style={{ padding: '0 0.75rem' }} 
+            title="Tutorial"
+          >
+            <HelpCircle size={20} />
+          </button>
           <Link to={`/review/${id}`} className="btn btn-secondary" style={{ backgroundColor: 'var(--success)', color: 'white' }}>
             <Play size={16} /> Review
           </Link>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { LogOut, Settings as SettingsIcon, BrainCircuit, User as UserIcon, ChevronDown } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Layout() {
@@ -29,8 +29,8 @@ export default function Layout() {
     <div className="app-layout">
       <header className="app-header">
         {/* Brand */}
-        <Link to="/" className="app-header-brand">
-          <BrainCircuit size={24} style={{ color: 'var(--accent-color)' }} />
+        <Link to="/" className="app-header-brand" style={{ gap: '0.75rem' }}>
+          <img src="/logo.svg" alt="MyChessTree Logo" style={{ height: 32, width: 'auto' }} />
           <span>MyChessTree</span>
         </Link>
 
@@ -49,7 +49,7 @@ export default function Layout() {
               whiteSpace: 'nowrap',
               fontSize: '0.875rem',
             }}>
-              {user?.email ?? 'Profile'}
+              {user?.user_metadata?.username ?? user?.email ?? 'Profile'}
             </span>
             <ChevronDown
               size={14}
