@@ -4,7 +4,7 @@ import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import ForceTree, { type TreeNode } from '../components/ForceTree';
-import { ArrowLeft, Save, RotateCcw, Undo2, Info, HelpCircle, X, ChevronRight, Play } from 'lucide-react';
+import { ArrowLeft, Save, Info, HelpCircle, X, ChevronRight, Play } from 'lucide-react';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
@@ -38,6 +38,7 @@ export default function TreeEditor() {
   const [saving, setSaving] = useState(false);
   const [hasPending, setHasPending] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0, active: false });
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -143,14 +144,7 @@ export default function TreeEditor() {
     setCurrentFen(nodeInfo.fen);
   }, []);
 
-  const handleUndo = useCallback(() => {
-    if (gameRef.current.undo()) setCurrentFen(gameRef.current.fen());
-  }, []);
 
-  const handleReset = useCallback(() => {
-    gameRef.current = new Chess();
-    setCurrentFen(gameRef.current.fen());
-  }, []);
 
   const handleSave = useCallback(async () => {
     if (!id || !treeData) return;
@@ -231,17 +225,43 @@ export default function TreeEditor() {
       {/* Editor Body */}
       <div className="editor-layout">
         <div className="chess-pane-new">
-          {/* Eval */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', padding: '0.5rem 0.75rem', backgroundColor: 'var(--panel-bg)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
-            <span>Eval: <strong style={{ color: perspScore >= 0 ? '#10b981' : '#e11d48' }}>{perspScore >= 0 ? '+' : ''}{perspScore.toFixed(2)}</strong></span>
-            <span className="text-muted">Best: <strong>{bestMove || '…'}</strong></span>
-          </div>
+
 
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'stretch' }}>
-            {/* Eval Bar */}
-            <div style={{ width: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: '#111', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-              <div style={{ width: '100%', height: `${whitePercent}%`, backgroundColor: '#f5f5f5', transition: 'height 0.4s ease' }} />
+            {/* Eval Bar Container (handles dynamic tooltip) */}
+            <div 
+              onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY, active: true })}
+              onMouseLeave={() => setMousePos(prev => ({ ...prev, active: false }))}
+              style={{ width: 14, height: '100%', position: 'relative', cursor: 'help' }}
+            >
+              <div style={{ width: '100%', height: '100%', borderRadius: 7, overflow: 'hidden', backgroundColor: '#111', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <div style={{ width: '100%', height: `${whitePercent}%`, backgroundColor: '#f5f5f5', transition: 'height 0.4s ease' }} />
+              </div>
             </div>
+
+            {/* Dynamic Mouse Tooltip */}
+            {mousePos.active && (
+              <div style={{
+                position: 'fixed',
+                top: mousePos.y - 35,
+                left: mousePos.x + 15,
+                pointerEvents: 'none',
+                backgroundColor: 'var(--panel-bg)',
+                border: '1px solid var(--border-color-focus)',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                fontSize: '0.8rem',
+                color: 'white',
+                zIndex: 9999,
+                whiteSpace: 'nowrap',
+                boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
+                opacity: 0.95
+              }}>
+                Eval: <strong>{perspScore >= 0 ? '+' : ''}{perspScore.toFixed(2)}</strong> 
+                <span style={{ margin: '0 8px', opacity: 0.3 }}>|</span>
+                Best: <strong>{bestMove || '…'}</strong>
+              </div>
+            )}
 
             {/* Board */}
             <div style={{ flex: 1 }}>
@@ -263,10 +283,7 @@ export default function TreeEditor() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-            <button className="btn btn-secondary" onClick={handleUndo} style={{ flex: 1 }}><Undo2 size={16} /> Undo</button>
-            <button className="btn btn-secondary" onClick={handleReset} style={{ flex: 1 }}><RotateCcw size={16} /> Reset</button>
-          </div>
+
 
           {hasPending && (
             <div style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, CheckCircle, XCircle, Settings as SettingsIcon, Brain } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Brain } from 'lucide-react';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 
 interface TreeNode {
@@ -201,62 +201,81 @@ export default function Review() {
 
   return (
     <div className="review-container" style={{ display:'flex', flexDirection:'column', height: 'calc(100vh - var(--header-height) - 1.5rem)', gap: '1rem' }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <button onClick={() => navigate(`/editor/${id}`)} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
-        <div style={{ textAlign:'center' }}>
-          <h2 style={{ margin:0, fontSize:'1.2rem' }}>{treeMeta.title}</h2>
-          <span className="text-sm text-muted">Position {currentIndex + 1} / {flashcards.length}</span>
-        </div>
-        <button onClick={() => navigate('/settings')} className="btn btn-secondary btn-icon"><SettingsIcon size={18} /></button>
-      </div>
-
-      <div className="card" style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden', padding: '1rem' }}>
-        <div className="review-board-wrapper" style={{ width: '100%', maxWidth: 'min(70vh, 100%)', aspectRatio: '1/1' }}>
-          {(() => {
-            const Board = Chessboard as any;
-            return <Board
-              options={{
-                position: currentFen,
-                onPieceDrop: onDrop,
-                boardOrientation: treeMeta.color,
-                pieces: calientePieces,
-                darkSquareStyle: boardStyles.darkSquareStyle,
-                lightSquareStyle: boardStyles.lightSquareStyle,
-                boardStyle: boardStyles.boardStyle,
-              }}
-            />;
-          })()}
+      <div className="review-layout">
+        <div className="review-board-container">
+          <div className="card" style={{ padding: '1rem', position: 'relative', overflow: 'hidden' }}>
+            <div className="review-board-wrapper" style={{ width: '100%', aspectRatio: '1/1' }}>
+              {(() => {
+                const Board = Chessboard as any;
+                return <Board
+                  options={{
+                    position: currentFen,
+                    onPieceDrop: onDrop,
+                    boardOrientation: treeMeta.color,
+                    pieces: calientePieces,
+                    darkSquareStyle: boardStyles.darkSquareStyle,
+                    lightSquareStyle: boardStyles.lightSquareStyle,
+                    boardStyle: boardStyles.boardStyle,
+                  }}
+                />;
+              })()}
+            </div>
+          </div>
         </div>
 
-        <div style={{ marginTop: '1.5rem', width: '100%', maxWidth: 600, height: 140, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-          {!revealed ? (
-            <p style={{ fontSize: '1.3rem', fontWeight: 600, display:'flex', alignItems:'center', gap: 8 }}>
-              <Brain className="text-accent" size={24} />
-              Your move for <span style={{ color:'var(--accent-color)', textTransform:'capitalize' }}>{treeMeta.color}</span>
-            </p>
-          ) : (
-            <div className="animate-fade-in" style={{ width: '100%', textAlign: 'center' }}>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <div style={{ display:'flex', alignItems:'center', gap: 6, color: status === 'correct' ? 'var(--success)' : 'var(--error)', justifyContent:'center', fontSize: '1.2rem', fontWeight: 700 }}>
-                  {status === 'correct' ? <CheckCircle size={22} /> : <XCircle size={22} />}
-                  {status === 'correct' ? 'Correct!' : 'Incorrect'}
+        <div className="review-info-container">
+          <div className="card" style={{ width: '100%', minHeight: 280, display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem' }}>
+            {/* Header elements moved inside the card */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+              <button 
+                onClick={() => navigate(`/editor/${id}`)} 
+                className="btn btn-secondary btn-icon"
+                title="Back to Editor"
+                style={{ borderRadius: 'var(--radius-md)' }}
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', lineHeight: 1.2 }}>{treeMeta.title}</h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Position {currentIndex + 1} / {flashcards.length}
                 </div>
-                {status === 'wrong' && <p className="text-muted text-sm">Correct move: <strong>{expectedMove}</strong></p>}
-              </div>
-
-              <div style={{ display:'flex', gap:'0.75rem', justifyContent:'center', width:'100%' }}>
-                {status === 'wrong' ? (
-                  <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: 1 }}>RETRY</button>
-                ) : (
-                  <>
-                    <button onClick={() => submitRating(1)} className="btn btn-secondary" style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)' }}>HARD</button>
-                    <button onClick={() => submitRating(3)} className="btn" style={{ flex: 1, backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' }}>GOOD</button>
-                    <button onClick={() => submitRating(5)} className="btn btn-secondary" style={{ flex: 1, backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>EASY</button>
-                  </>
-                )}
               </div>
             </div>
-          )}
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              {!revealed ? (
+                <div style={{ textAlign: 'center' }}>
+                  <Brain className="text-accent" size={32} style={{ marginBottom: '1rem', opacity: 0.9 }} />
+                  <p style={{ fontSize: '1.4rem', fontWeight: 600, margin: 0 }}>
+                    Your move for <span style={{ color:'var(--accent-color)', textTransform:'capitalize' }}>{treeMeta.color}</span>
+                  </p>
+                </div>
+              ) : (
+                <div className="animate-fade-in" style={{ width: '100%', textAlign: 'center' }}>
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap: 6, color: status === 'correct' ? 'var(--success)' : 'var(--error)', justifyContent:'center', fontSize: '1.2rem', fontWeight: 700 }}>
+                      {status === 'correct' ? <CheckCircle size={22} /> : <XCircle size={22} />}
+                      {status === 'correct' ? 'Correct!' : 'Incorrect'}
+                    </div>
+                    {status === 'wrong' && <p className="text-muted text-sm">Correct move: <strong>{expectedMove}</strong></p>}
+                  </div>
+
+                  <div style={{ display:'flex', gap:'0.75rem', justifyContent:'center', width:'100%' }}>
+                    {status === 'wrong' ? (
+                      <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: 1 }}>RETRY</button>
+                    ) : (
+                      <>
+                        <button onClick={() => submitRating(1)} className="btn btn-secondary" style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', padding: '0.75rem 0.5rem' }}>HARD</button>
+                        <button onClick={() => submitRating(3)} className="btn" style={{ flex: 1, backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', padding: '0.75rem 0.5rem' }}>GOOD</button>
+                        <button onClick={() => submitRating(5)} className="btn btn-secondary" style={{ flex: 1, backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', padding: '0.75rem 0.5rem' }}>EASY</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

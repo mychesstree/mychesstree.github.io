@@ -240,7 +240,7 @@ button {
 }
 
 .chess-pane-new {
-  flex: 0 0 min(520px, 50%);
+  flex: 0 0 min(600px, 60%);
   display: flex;
   flex-direction: column;
   padding: 1.25rem;
@@ -341,3 +341,77 @@ button {
   box-shadow: 0 4px 12px rgba(225, 29, 72, 0.35);
 }
 
+/* ── Review Page Responsive Layout ───────────────────────── */
+.review-layout {
+  display: flex;
+  flex: 1;
+  gap: 2rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.review-board-container {
+  flex: 1;
+  max-width: 700px;
+  width: 100%;
+}
+
+.review-info-container {
+  flex: 0 0 350px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .review-layout {
+    flex-direction: column;
+    overflow-y: auto;
+    padding-bottom: 2rem;
+  }
+  .review-board-container {
+    max-width: 500px;
+  }
+  .review-info-container {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
+/* ── Tooltip ─────────────────────────────────────────────── */
+[data-tooltip] {
+  position: relative;
+  cursor: help;
+}
+
+[data-tooltip]:before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color-focus);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 1001;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+[data-tooltip]:hover:before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-4px);
+}
