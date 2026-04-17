@@ -7,32 +7,40 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setMessage('');
 
     try {
-      if (isSignUp) {
-        // Validation: Username alphanumeric 3-10 characters
+      if (mode === 'signup') {
         const usernameRegex = /^[a-zA-Z0-9]{3,10}$/;
         if (!usernameRegex.test(username)) {
           throw new Error('Username must be alphanumeric and 3-10 characters long.');
         }
 
-        const { error } = await supabase.auth.signUp({ 
-          email, 
+        const { error } = await supabase.auth.signUp({
+          email,
           password,
           options: {
-            data: { username }
+            data: { username },
+            emailRedirectTo: `${window.location.origin}/#/login`
           }
         });
         if (error) throw error;
-        alert('Check your email for the confirmation link!');
+        setMessage('Check your email for the confirmation link!');
+      } else if (mode === 'forgot') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/#/reset-password`
+        });
+        if (error) throw error;
+        setMessage('Check your email for the password reset link!');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -47,15 +55,14 @@ export default function Login() {
 
   return (
     <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: 'var(--bg-color)' }}>
-      <div className="card" style={{ maxWidth: '400px', width: '100%', margin: '2rem' }}>
-        <div className="flex flex-col items-center mb-6">
-          <img src="/logo.svg" alt="MyChessTree Logo" style={{ height: 64, width: 'auto', marginBottom: '1rem' }} />
-          <h1 className="mt-4" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
-            {isSignUp ? 'Create an Account' : 'Welcome Back'}
-          </h1>
-          <p className="text-muted text-center" style={{ fontSize: '0.9rem' }}>
-            Map out your chess openings and review them with spaced repetition.
-          </p>
+      <div className="card" style={{ maxWidth: '400px', width: '100%', margin: '0 1rem' }}>
+        <div className="flex items-center gap-4 mb-8">
+          <img src="/logo.svg" alt="MyChessTree Logo" style={{ height: 48, width: 'auto' }} />
+          <div>
+            <h1 style={{ fontSize: '2rem', marginTop: 10 }}>
+              {mode === 'signup' ? 'Create Account' : mode === 'forgot' ? 'Reset' : 'Welcome Back'}
+            </h1>
+          </div>
         </div>
 
         {error && (
@@ -64,52 +71,78 @@ export default function Login() {
           </div>
         )}
 
+        {message && (
+          <div style={{ color: 'white', backgroundColor: 'var(--success)', padding: '0.75rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+            {message}
+          </div>
+        )}
+
         <form onSubmit={handleAuth}>
           <div className="input-group">
             <label>Email</label>
-            <input 
-              type="email" 
-              className="input" 
+            <input
+              type="email"
+              className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required 
+              required
             />
           </div>
-          {isSignUp && (
+
+          {mode === 'signup' && (
             <div className="input-group">
               <label>Username</label>
-              <input 
-                type="text" 
-                className="input" 
-                placeholder="3-10 characters (alphanumeric)"
+              <input
+                type="text"
+                className="input"
+                placeholder="3-10 characters"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                required 
+                required
               />
             </div>
           )}
-          <div className="input-group">
-            <label>Password</label>
-            <input 
-              type="password" 
-              className="input" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required 
-            />
-          </div>
+
+          {mode !== 'forgot' && (
+            <div className="input-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label>Password</label>
+                {mode === 'signin' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('forgot')}
+                    style={{ background: 'none', border: 'none', color: 'var(--accent-color)', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
+                  >
+                    Forgot Password?
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
           <button type="submit" className="btn" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
-            {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+            {loading ? 'Loading...' : (mode === 'signup' ? 'Sign Up' : mode === 'forgot' ? 'Send Reset Link' : 'Sign In')}
           </button>
         </form>
 
         <div className="text-center" style={{ marginTop: '1.5rem' }}>
-          <button 
-            type="button" 
+          <button
+            type="button"
             style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.875rem' }}
-            onClick={() => setIsSignUp(!isSignUp)}
+            onClick={() => {
+              setMode(mode === 'signin' ? 'signup' : 'signin');
+              setError('');
+              setMessage('');
+            }}
           >
-            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+            {mode === 'signin' ? "Don't have an account? Sign Up" : 'Back to Sign In'}
           </button>
         </div>
       </div>

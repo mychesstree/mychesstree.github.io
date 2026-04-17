@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import TreeEditor from './pages/TreeEditor';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
+import UpdatePassword from './pages/UpdatePassword';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -22,6 +23,7 @@ function App() {
       <HashRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<UpdatePassword />} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="editor/:id" element={<TreeEditor />} />
