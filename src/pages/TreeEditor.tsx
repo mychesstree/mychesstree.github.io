@@ -106,6 +106,14 @@ export default function TreeEditor() {
   const [importPgnText, setImportPgnText] = useState('');
   const [importedBranch, setImportedBranch] = useState<TreeNode | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -486,19 +494,29 @@ export default function TreeEditor() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button onClick={() => navigate('/')} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
-          <div style={{ flex: showMenu ? 0 : undefined, overflow: 'hidden', transition: 'flex 0.3s ease' }}>
+          <div style={{ flex: isMobile && showMenu ? 0 : undefined, overflow: 'hidden', transition: 'flex 0.3s ease' }}>
             <h2 style={{ margin: 0, fontSize: '1.2rem', borderBottom: treeMeta.color === 'white' ? '5px solid #fff' : '5px solid #444444ff', display: 'inline-block', lineHeight: '1.3' }}>{treeMeta.title}</h2>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-          {/* Mobile-only hamburger menu */}
-          {window.innerWidth <= 768 && (
-            <button onClick={() => setShowMenu(!showMenu)} className="btn btn-icon btn-secondary">
-              <Menu size={20} />
-            </button>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', position: 'relative' }}>
+          {/* Mobile: show expanded buttons when menu open, then hamburger */}
+          {isMobile && (
+            <>
+              {showMenu && (
+                <>
+                  <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => { setDeleteMode(!isDeleteMode); setShowMenu(false); }} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
+                  <TooltipButton tooltip="Share Repertoire" onClick={() => { setShowShareModal(true); setShowMenu(false); }} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                  <TooltipButton tooltip="Import Lichess PGN" onClick={() => { setShowImportModal(true); setShowMenu(false); }} className="btn btn-icon btn-secondary"><Import size={20} /></TooltipButton>
+                  {!viewOnly && <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={() => { handleSave(); setShowMenu(false); }} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>}
+                </>
+              )}
+              <button onClick={() => setShowMenu(!showMenu)} className="btn btn-icon btn-secondary" style={showMenu ? { backgroundColor: 'var(--accent-color)' } : undefined}>
+                <Menu size={20} />
+              </button>
+            </>
           )}
-          {/* Desktop: always show buttons | Mobile: show dropdown when menu open */}
-          {window.innerWidth > 768 ? (
+          {/* Desktop: always show all buttons */}
+          {!isMobile && (
             <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
               <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => setDeleteMode(!isDeleteMode)} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
               <TooltipButton tooltip="Share Repertoire" onClick={() => setShowShareModal(true)} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
@@ -512,21 +530,7 @@ export default function TreeEditor() {
                 </div>
               )}
             </div>
-          ) : showMenu ? (
-            <div style={{ position: 'absolute', top: 56, right: 8, backgroundColor: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.5rem', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => { setDeleteMode(!isDeleteMode); setShowMenu(false); }} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
-              <TooltipButton tooltip="Share Repertoire" onClick={() => { setShowShareModal(true); setShowMenu(false); }} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
-              <TooltipButton tooltip="Import Lichess PGN" onClick={() => { setShowImportModal(true); setShowMenu(false); }} className="btn btn-icon btn-secondary"><Import size={20} /></TooltipButton>
-              <div style={{ width: '100%', height: 1, backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
-              {!viewOnly ? (
-                <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={() => { handleSave(); setShowMenu(false); }} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                  <Users size={16} className="text-muted" /><span className="text-xs text-muted" style={{ fontWeight: 600 }}>READ</span>
-                </div>
-              )}
-            </div>
-          ) : null}
+          )}
         </div>
       </div>
 

@@ -13,7 +13,9 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 ![Lucide](https://img.shields.io/badge/Lucide-Pink?style=for-the-badge&logo=lucide&logoColor=white)
 
 
+in the Dashboard lets add a notification dot to the top right of the review button if there are things due
 
+Lets fix import data from lichess as right now it doesn't detect the moves correctly and says there are no valid moves. lets make the temporary branches appear as a dotted white
 
 
 Notes:

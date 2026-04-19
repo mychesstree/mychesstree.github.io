@@ -3,8 +3,15 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, GitMerge, LayoutGrid, Users, Info } from 'lucide-react';
+import { Chess } from 'chess.js';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
+
+interface TreeNode {
+  fen: string;
+  move?: string;
+  children: TreeNode[];
+}
 
 interface Tree {
   id: string;
@@ -12,6 +19,7 @@ interface Tree {
   color: 'white' | 'black';
   created_at: string;
   cards_due?: number;
+  tree_data?: TreeNode;
 }
 
 export default function Dashboard() {
@@ -55,12 +63,36 @@ export default function Dashboard() {
 
     if (data) {
       const treesWithDue = await Promise.all(data.map(async (tree) => {
-        const { count } = await supabase
+        // Fetch all reviews for this tree
+        const { data: reviews } = await supabase
           .from('reviews')
-          .select('*', { count: 'exact', head: true })
-          .eq('tree_id', tree.id)
-          .lte('next_review', new Date().toISOString());
-        return { ...tree, cards_due: count || 0 };
+          .select('fen, next_review_date')
+          .eq('tree_id', tree.id);
+
+        const reviewMap = new Map(reviews?.map(r => [r.fen, new Date(r.next_review_date)]) || []);
+        
+        // Traverse tree to count due positions (only positions where it's player's turn)
+        let dueCount = 0;
+        const isPlayerWhite = tree.color === 'white';
+
+        function traverse(node: TreeNode) {
+          const chess = new Chess(node.fen);
+          const isWhiteTurn = chess.turn() === 'w';
+          const isSideToMatch = isPlayerWhite ? isWhiteTurn : !isWhiteTurn;
+
+          if (isSideToMatch && node.children && node.children.length > 0) {
+            const nextReview = reviewMap.get(node.fen);
+            const isDue = !nextReview || nextReview <= new Date();
+            if (isDue) dueCount++;
+          }
+
+          if (node.children) {
+            node.children.forEach(child => traverse(child));
+          }
+        }
+
+        if (tree.tree_data) traverse(tree.tree_data);
+        return { ...tree, cards_due: dueCount };
       }));
       setTrees(treesWithDue);
     }
@@ -202,22 +234,17 @@ export default function Dashboard() {
                 </Link>
                 <Link to={`/review/${tree.id}`} className="btn btn-secondary" style={{ position: 'relative' }}>
                   Review
-                  {tree.cards_due !== undefined && tree.cards_due > 0 && (
+                  {tree.cards_due! > 0 && (
                     <span style={{
                       position: 'absolute',
-                      top: -8,
-                      right: -8,
-                      backgroundColor: 'var(--accent-color)',
-                      color: 'white',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '10px',
-                      minWidth: 18,
-                      textAlign: 'center'
-                    }}>
-                      {tree.cards_due}
-                    </span>
+                      top: -4,
+                      right: -4,
+                      width: 10,
+                      height: 10,
+                      backgroundColor: '#ef4444',
+                      borderRadius: '50%',
+                      border: '2px solid var(--panel-bg)'
+                    }} />
                   )}
                 </Link>
               </div>
