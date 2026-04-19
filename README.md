@@ -14,11 +14,8 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 
 
 
-Lets fix import data from lichess as right now it doesn't detect the moves correctly and says there are no valid moves. lets make the temporary branches appear as a dotted white
-
-------
-
-Lets add an export button that allows the user to export their tree data and review data into a file that they can import
+Todo:
+Lets add an export button that allows the user to export their tree data and review data into a file that they can import. Add a button to Dashboard.tsx next to new Tree with lucide icon. make it pop open a model that will import a json file
 
 Lets add a continue as guest (which limits the user to only use the app without any supabase involvement) the user needs to import and export their tree data manually. Lets add this export button to share button in tree editor. must create free account to save (data is deleted daily for guests)
 
@@ -28,11 +25,6 @@ Notes:
 - Fix re-center on node 
 - Lets create a public list for trees that people can browse and use
 - under the tree name in the tree editor, under share add a button to make the tree public for read access 
-
 - import data from lichess and export data (free unlimited) review as well
-
-
 - Bughouse mode
-
-
 - help me understand the space complexity of storing the tree and the average storage we can expect per user. help me understand how we could limit users to 6 trees
