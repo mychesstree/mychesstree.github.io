@@ -23,7 +23,7 @@ interface Tree {
 }
 
 export default function Dashboard() {
-  const { user, isGuest, loadGuestTrees, saveGuestTree } = useAuth();
+  const { user, isGuest, loadGuestTrees, saveGuestTree, loadGuestReviews } = useAuth();
   const [trees, setTrees] = useState<Tree[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -41,10 +41,34 @@ export default function Dashboard() {
 
     if (isGuest) {
       const guestTrees = loadGuestTrees();
-      setTrees(guestTrees.map(t => ({
-        ...t,
-        cards_due: 0
-      })));
+      const treesWithDue = guestTrees.map(tree => {
+        const reviews = loadGuestReviews(tree.id);
+        const reviewMap = new Map(reviews.map(r => [r.fen, new Date(r.next_review_date)]));
+        
+        // Traverse tree to count due positions (only positions where it's player's turn)
+        let dueCount = 0;
+        const isPlayerWhite = tree.color === 'white';
+
+        function traverse(node: TreeNode) {
+          const chess = new Chess(node.fen);
+          const isWhiteTurn = chess.turn() === 'w';
+          const isSideToMatch = isPlayerWhite ? isWhiteTurn : !isWhiteTurn;
+
+          if (isSideToMatch && node.children && node.children.length > 0) {
+            const nextReview = reviewMap.get(node.fen);
+            const isDue = !nextReview || nextReview <= new Date();
+            if (isDue) dueCount++;
+          }
+
+          if (node.children) {
+            node.children.forEach(child => traverse(child));
+          }
+        }
+
+        if (tree.tree_data) traverse(tree.tree_data);
+        return { ...tree, cards_due: dueCount };
+      });
+      setTrees(treesWithDue);
       setLoading(false);
       return;
     }
@@ -368,12 +392,12 @@ export default function Dashboard() {
       )}    <div className="animate-fade-in">
 
         {isGuest && (
-          <div className="card mb-4" style={{ padding: '0.75rem 1rem', backgroundColor: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+          <div className="card mb-4" style={{ padding: '0.75rem 1rem', backgroundColor: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
             <div className="flex items-center gap-2">
-              <AlertCircle size={16} style={{ color: '#fbbf24', flexShrink: 0 }} />
+              <AlertCircle size={16} style={{ color: '#ffffff', flexShrink: 0 }} />
               <p className="text-muted" style={{ margin: 0, fontSize: '0.8rem' }}>
-                Guest: Trees stored in this browser only
-                <Link to="/login" style={{ color: 'var(--accent-color)', marginLeft: '0.25rem' }}>Create account to save</Link>
+                Trees are stored in this browser only
+                <Link to="/login" style={{ color: 'var(--accent-color)', marginLeft: '1rem' }}>Create account to save</Link>
               </p>
             </div>
           </div>
@@ -482,23 +506,21 @@ export default function Dashboard() {
                     <GitMerge size={16} />
                     Edit
                   </Link>
-                  {!isGuest && (
-                    <Link to={`/review/${tree.id}`} className="btn btn-secondary" style={{ position: 'relative' }}>
-                      Review
-                      {tree.cards_due! > 0 && (
-                        <span style={{
-                          position: 'absolute',
-                          top: -4,
-                          right: -4,
-                          width: 10,
-                          height: 10,
-                          backgroundColor: '#ef4444',
-                          borderRadius: '50%',
-                          border: '2px solid var(--panel-bg)'
-                        }} />
-                      )}
-                    </Link>
-                  )}
+                  <Link to={`/review/${tree.id}`} className="btn btn-secondary" style={{ position: 'relative' }}>
+                    Review
+                    {tree.cards_due! > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: -4,
+                        right: -4,
+                        width: 10,
+                        height: 10,
+                        backgroundColor: '#ef4444',
+                        borderRadius: '50%',
+                        border: '2px solid var(--panel-bg)'
+                      }} />
+                    )}
+                  </Link>
                 </div>
               </div>
             ))}

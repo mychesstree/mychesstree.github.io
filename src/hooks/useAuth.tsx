@@ -16,6 +16,15 @@ interface GuestTree {
   created_at: string;
 }
 
+interface GuestReview {
+  fen: string;
+  tree_id: string;
+  next_review_date: string;
+  interval: number;
+  ease_factor: number;
+  repetitions: number;
+}
+
 interface AuthContextType {
   user: User | null;
   isGuest: boolean;
@@ -26,9 +35,14 @@ interface AuthContextType {
   loadGuestTrees: () => GuestTree[];
   deleteGuestTree: (id: string) => void;
   getGuestTree: (id: string) => GuestTree | undefined;
+  saveGuestReview: (review: GuestReview) => void;
+  loadGuestReviews: (treeId: string) => GuestReview[];
+  deleteGuestReviews: (treeId: string) => void;
+  getGuestReview: (fen: string, treeId: string) => GuestReview | undefined;
 }
 
 const GUEST_TREES_KEY = 'mychesstree_guest_trees';
+const GUEST_REVIEWS_KEY = 'mychesstree_guest_reviews';
 
 const AuthContext = createContext<AuthContextType>({ 
   user: null, 
@@ -40,6 +54,10 @@ const AuthContext = createContext<AuthContextType>({
   loadGuestTrees: () => [],
   deleteGuestTree: () => {},
   getGuestTree: () => undefined,
+  saveGuestReview: () => {},
+  loadGuestReviews: () => [],
+  deleteGuestReviews: () => {},
+  getGuestReview: () => undefined,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -101,6 +119,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return loadGuestTrees().find(t => t.id === id);
   }, [loadGuestTrees]);
 
+  const loadGuestReviews = useCallback((treeId: string): GuestReview[] => {
+    try {
+      const data = localStorage.getItem(GUEST_REVIEWS_KEY);
+      const allReviews = data ? JSON.parse(data) : [];
+      return allReviews.filter((review: GuestReview) => review.tree_id === treeId);
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const saveGuestReview = useCallback((review: GuestReview) => {
+    try {
+      const data = localStorage.getItem(GUEST_REVIEWS_KEY);
+      const allReviews = data ? JSON.parse(data) : [];
+      const existingIndex = allReviews.findIndex(
+        (r: GuestReview) => r.fen === review.fen && r.tree_id === review.tree_id
+      );
+      
+      if (existingIndex >= 0) {
+        allReviews[existingIndex] = review;
+      } else {
+        allReviews.push(review);
+      }
+      
+      localStorage.setItem(GUEST_REVIEWS_KEY, JSON.stringify(allReviews));
+    } catch (error) {
+      console.error('Failed to save guest review:', error);
+    }
+  }, []);
+
+  const deleteGuestReviews = useCallback((treeId: string) => {
+    try {
+      const data = localStorage.getItem(GUEST_REVIEWS_KEY);
+      const allReviews = data ? JSON.parse(data) : [];
+      const filteredReviews = allReviews.filter((review: GuestReview) => review.tree_id !== treeId);
+      localStorage.setItem(GUEST_REVIEWS_KEY, JSON.stringify(filteredReviews));
+    } catch (error) {
+      console.error('Failed to delete guest reviews:', error);
+    }
+  }, []);
+
+  const getGuestReview = useCallback((fen: string, treeId: string): GuestReview | undefined => {
+    try {
+      const data = localStorage.getItem(GUEST_REVIEWS_KEY);
+      const allReviews = data ? JSON.parse(data) : [];
+      return allReviews.find(
+        (review: GuestReview) => review.fen === fen && review.tree_id === treeId
+      );
+    } catch {
+      return undefined;
+    }
+  }, []);
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -112,6 +183,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loadGuestTrees,
       deleteGuestTree,
       getGuestTree,
+      saveGuestReview,
+      loadGuestReviews,
+      deleteGuestReviews,
+      getGuestReview,
     }}>
       {children}
     </AuthContext.Provider>

@@ -5,6 +5,7 @@ import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, CheckCircle, XCircle, Brain } from 'lucide-react';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
+import { useAuth } from '../hooks/useAuth';
 
 interface TreeNode {
   fen: string;
@@ -54,6 +55,7 @@ function calculateSM2(rating: number, oldInterval: number, oldRepetitions: numbe
 export default function Review() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, isGuest, getGuestTree, loadGuestReviews, saveGuestReview } = useAuth();
   const [treeMeta, setTreeMeta] = useState<any>(null);
 
   const gameRef = useRef(new Chess());
@@ -70,16 +72,32 @@ export default function Review() {
     if (!id) return;
 
     // 1. Fetch metadata and tree data
-    const { data: tree, error: treeErr } = await supabase.from('trees').select('*').eq('id', id).single();
-    if (treeErr || !tree) {
-      setLoading(false);
-      return;
+    let tree;
+    if (isGuest) {
+      tree = getGuestTree(id);
+      if (!tree) {
+        setLoading(false);
+        return;
+      }
+    } else {
+      const { data: treeData, error: treeErr } = await supabase.from('trees').select('*').eq('id', id).single();
+      if (treeErr || !treeData) {
+        setLoading(false);
+        return;
+      }
+      tree = treeData;
     }
     setTreeMeta(tree);
 
     // 2. Fetch existing reviews to determine what's due
-    const { data: reviews } = await supabase.from('reviews').select('fen, next_review_date').eq('tree_id', id);
-    const reviewMap = new Map(reviews?.map(r => [r.fen, new Date(r.next_review_date)]) || []);
+    let reviewMap: Map<string, Date> = new Map();
+    if (isGuest) {
+      const reviews = loadGuestReviews(id);
+      reviewMap = new Map(reviews.map(r => [r.fen, new Date(r.next_review_date)]));
+    } else {
+      const { data: reviews } = await supabase.from('reviews').select('fen, next_review_date').eq('tree_id', id);
+      reviewMap = new Map(reviews?.map(r => [r.fen, new Date(r.next_review_date)]) || []);
+    }
 
     const tData = tree.tree_data;
     const allMatchingCards: ReviewCard[] = [];
@@ -123,7 +141,7 @@ export default function Review() {
       setExpectedMove(startPos.mainMove);
     }
     setLoading(false);
-  }, [id]);
+  }, [id, isGuest, getGuestTree, loadGuestReviews]);
 
   useEffect(() => {
     loadTreeAndGenerateCards();
@@ -158,38 +176,68 @@ export default function Review() {
     if (!treeMeta || !flashcards[currentIndex]) return;
     const card = flashcards[currentIndex];
 
-    // Always log history for accurate heatmap
-    await supabase.from('review_logs').insert({
-      tree_id: card.treeId,
-      user_id: treeMeta.user_id,
-      fen: card.fen,
-      rating
-    });
-    if (rating === 1 || rating === 2) {
-      // "Again" (1) or "Hard" (2) -> Re-queue at the end of the session
-      handleSessionRequeue();
+    if (isGuest) {
+      // Guest user - use localStorage
+      if (rating === 1 || rating === 2) {
+        // "Again" (1) or "Hard" (2) -> Re-queue at the end of the session
+        handleSessionRequeue();
+      } else {
+        // "Medium" (3) or "Easy" (5) -> Save to localStorage
+        const existing = loadGuestReviews(card.treeId).find(r => r.fen === card.fen);
+        const oldInt = existing?.interval ?? 0;
+        const oldRep = existing?.repetitions ?? 0;
+        const oldEase = existing?.ease_factor ?? 2.5;
+
+        const { interval, repetitions, ease } = calculateSM2(rating, oldInt, oldRep, oldEase);
+        const nextReview = new Date();
+        nextReview.setDate(nextReview.getDate() + interval);
+
+        saveGuestReview({
+          fen: card.fen,
+          tree_id: card.treeId,
+          interval,
+          repetitions,
+          ease_factor: ease,
+          next_review_date: nextReview.toISOString()
+        });
+
+        nextCard();
+      }
     } else {
-      // "Medium" (3) or "Easy" (5) -> Graduate to Supabase (>= 1 day)
-      const { data: existing } = await supabase.from('reviews').select('*').eq('tree_id', card.treeId).eq('fen', card.fen).single();
-      const oldInt = existing?.interval ?? 0;
-      const oldRep = existing?.repetitions ?? 0;
-      const oldEase = existing?.ease_factor ?? 2.5;
-
-      const { interval, repetitions, ease } = calculateSM2(rating, oldInt, oldRep, oldEase);
-      const nextReview = new Date();
-      nextReview.setDate(nextReview.getDate() + interval);
-
-      await supabase.from('reviews').upsert({
+      // Signed-in user - use Supabase
+      // Always log history for accurate heatmap
+      await supabase.from('review_logs').insert({
         tree_id: card.treeId,
         user_id: treeMeta.user_id,
         fen: card.fen,
-        interval,
-        repetitions,
-        ease_factor: ease,
-        next_review_date: nextReview.toISOString()
+        rating
       });
+      if (rating === 1 || rating === 2) {
+        // "Again" (1) or "Hard" (2) -> Re-queue at the end of the session
+        handleSessionRequeue();
+      } else {
+        // "Medium" (3) or "Easy" (5) -> Graduate to Supabase (>= 1 day)
+        const { data: existing } = await supabase.from('reviews').select('*').eq('tree_id', card.treeId).eq('fen', card.fen).single();
+        const oldInt = existing?.interval ?? 0;
+        const oldRep = existing?.repetitions ?? 0;
+        const oldEase = existing?.ease_factor ?? 2.5;
 
-      nextCard();
+        const { interval, repetitions, ease } = calculateSM2(rating, oldInt, oldRep, oldEase);
+        const nextReview = new Date();
+        nextReview.setDate(nextReview.getDate() + interval);
+
+        await supabase.from('reviews').upsert({
+          tree_id: card.treeId,
+          user_id: treeMeta.user_id,
+          fen: card.fen,
+          interval,
+          repetitions,
+          ease_factor: ease,
+          next_review_date: nextReview.toISOString()
+        });
+
+        nextCard();
+      }
     }
   };
 
