@@ -18,13 +18,14 @@ Lets fix import data from lichess as right now it doesn't detect the moves corre
 
 ------
 
-Lets add an export button that allows the user to export their tree data and review data
+Lets add an export button that allows the user to export their tree data and review data into a file that they can import
 
 Lets add a continue as guest (which limits the user to only use the app without any supabase involvement) the user needs to import and export their tree data manually. Lets add this export button to share button in tree editor. must create free account to save (data is deleted daily for guests)
 
 
 Notes:
 - Under Shared with me remove create tree button and just say no trees shared with you
+- Fix re-center on node 
 - Lets create a public list for trees that people can browse and use
 - under the tree name in the tree editor, under share add a button to make the tree public for read access 
 

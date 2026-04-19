@@ -364,52 +364,83 @@ export default function TreeEditor() {
 
   const handleImport = useCallback(() => {
     const pgn = importPgnText.trim();
-    if (!pgn) return;
+    if (!pgn || !treeData) return;
     const { moves } = parsePgnMoves(pgn);
     if (moves.length === 0) {
       alert('No valid moves found in PGN');
       return;
     }
 
-    // Build full tree from start position - each move gets its own node
-    const buildTree = (moveList: string[]): TreeNode => {
-      const startGame = new Chess();
-      const startFen = startGame.fen();
+    console.log('Parsed moves:', moves);
+
+    const game = new Chess();
+    let currentTreeNode = treeData;
+    let divergeIndex = 0;
+
+    // Walk through moves, checking against our tree
+    for (let i = 0; i < moves.length; i++) {
+      const moveResult = game.move(moves[i]);
+      if (!moveResult) break;
       
-      // Root node at start position
-      const root: TreeNode = { fen: startFen, move: 'Start', children: [] };
+      const gameFen = game.fen();
+      console.log(`Move ${i + 1}: ${moves[i]} -> ${gameFen}`);
       
-      // Track all nodes at each depth
-      const depthMap = new Map<string, TreeNode>();
-      depthMap.set(startFen, root);
+      // Find if this position exists in our tree at current node
+      const matchingChild = currentTreeNode.children.find(c => c.fen === gameFen);
+      console.log('Current tree node fen:', currentTreeNode.fen);
+      console.log('Children fens:', currentTreeNode.children.map(c => c.fen));
       
-      // Process each move from the initial position
-      const currentGame = new Chess();
-      let node: TreeNode = root;
-      
-      for (const moveSAN of moveList) {
-        try {
-          const result = currentGame.move(moveSAN);
-          if (result) {
-            const newFen = currentGame.fen();
-            const newNode: TreeNode = {
-              fen: newFen,
-              move: result.san,
-              children: []
-            };
-            node.children.push(newNode);
-            node = newNode;
-          }
-        } catch (e) {
-          console.log('Could not make move:', moveSAN);
-        }
+      if (matchingChild) {
+        console.log('Found matching child, continuing...');
+        currentTreeNode = matchingChild;
+        divergeIndex = i + 1;
+      } else {
+        console.log('No matching child - diverging here');
+        break;
       }
+    }
 
-      return root;
-    };
+    console.log('Shared prefix length:', divergeIndex, 'of', moves.length);
 
-    const branch = buildTree(moves);
-    setImportedBranch(branch);
+    // If all moves exist
+    if (divergeIndex === moves.length) {
+      alert('All moves already exist in your tree!');
+      return;
+    }
+
+    // Build the branch from the divergence point
+    const divergeGame = new Chess();
+    for (let i = 0; i < divergeIndex; i++) {
+      divergeGame.move(moves[i]);
+    }
+
+    const branchRoot: TreeNode = { fen: divergeGame.fen(), move: 'Start', children: [] };
+    let current = branchRoot;
+
+    for (let i = divergeIndex; i < moves.length; i++) {
+      try {
+        const result = divergeGame.move(moves[i]);
+        if (result) {
+          const newNode: TreeNode = {
+            fen: divergeGame.fen(),
+            move: result.san,
+            children: []
+          };
+          current.children.push(newNode);
+          current = newNode;
+          console.log('Added node:', result.san, 'at', divergeGame.fen());
+        }
+      } catch (e) {
+        console.log('Failed to add move:', moves[i]);
+      }
+    }
+
+    if (branchRoot.children.length === 0) {
+      alert('No new moves to add!');
+      return;
+    }
+
+    setImportedBranch(branchRoot);
     setShowImportModal(false);
     setImportPgnText('');
   }, [importPgnText]);

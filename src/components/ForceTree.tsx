@@ -189,9 +189,9 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
       .attr('fill', (d: any) => {
         if (d.isImported) return '#fff';
         if (d.fen === currentFen) return 'var(--accent-color)';
-        // Color based on whose turn it is at this position
+        // Color based on whose turn it is at this position (flip: white turn = dark node)
         const isWhiteTurn = d.fen.split(' ')[1] === 'w';
-        return isWhiteTurn ? '#fff' : '#333';
+        return isWhiteTurn ? '#333' : '#fff';
       })
       .attr('stroke', (d: any) => {
         if (d.isImported) return '#fff';
