@@ -17,7 +17,7 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 Todo:
 Lets add an export button that allows the user to export their tree data and review data into a file that they can import. Add a button to Dashboard.tsx next to new Tree with lucide icon. make it pop open a model that will import a json file
 
-Lets add a continue as guest (which limits the user to only use the app without any supabase involvement) the user needs to import and export their tree data manually. Lets add this export button to share button in tree editor. must create free account to save (data is deleted daily for guests)
+Expand on the "continue as guest" feature (which limits the user to only use the app without any supabase involvement) the user needs to import and export their tree data manually. Lets add this export button to share button in tree editor. must create free account to save (data is deleted daily for guests)
 
 
 Notes:
