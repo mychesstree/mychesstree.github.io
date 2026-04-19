@@ -5,7 +5,7 @@ import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import ForceTree, { type TreeNode } from '../components/ForceTree';
 import { useAuth } from '../hooks/useAuth';
-import { ArrowLeft, Save, Info, HelpCircle, X, ChevronRight, Play, Share2, Trash2, Users, Import } from 'lucide-react';
+import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 
@@ -62,26 +62,22 @@ function parsePgnMoves(pgn: string): string[] {
 
   const moveText = pgn
     .replace(/\[[^\]]*\]/g, '')
+    .replace(/\{[^}]*\}/g, '')
     .replace(/\d+\.\s*\.\./g, ' ')
     .replace(/\d+\.\s*/g, ' ')
     .trim();
 
   const tokens = moveText.split(/\s+/);
   for (const token of tokens) {
-    const clean = token.replace(/[0-9*+-]/g, '');
-    if (!clean || clean === '1-0' || clean === '0-1' || clean === '1/2-1/2' || clean === '*') continue;
+    const clean = token.replace(/[^a-zA-Z+#]/g, '');
+    if (!clean || clean.length < 2) continue;
+    if (['1-0', '0-1', '1/2-1/2', '*'].includes(clean)) continue;
     try {
       const move = game.move(clean);
-      if (move) {
-        moves.push(clean);
-      }
-    } catch {}
+      if (move) moves.push(clean);
+    } catch { /* skip */ }
   }
 
-  const finalGame = new Chess();
-  for (let i = 0; i < moves.length; i++) {
-    finalGame.move(moves[i]);
-  }
   return moves;
 }
 
@@ -109,6 +105,7 @@ export default function TreeEditor() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPgnText, setImportPgnText] = useState('');
   const [importedBranch, setImportedBranch] = useState<TreeNode | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -284,6 +281,36 @@ export default function TreeEditor() {
     setSaving(false);
   }, [id, treeData]);
 
+  const handleImport = useCallback(() => {
+    const pgn = importPgnText.trim();
+    if (!pgn) return;
+    const moves = parsePgnMoves(pgn);
+    if (moves.length === 0) {
+      alert('No valid moves found in PGN');
+      return;
+    }
+    console.log('Importing moves:', moves);
+
+    const buildTree = (moveList: string[]): TreeNode => {
+      const game = new Chess();
+      const startFen = game.fen();
+      let current: TreeNode = { fen: startFen, move: 'Start', children: [] };
+
+      for (let i = 0; i < moveList.length; i++) {
+        game.move(moveList[i]);
+        const node: TreeNode = { fen: game.fen(), move: moveList[i], children: [] };
+        current.children.push(node);
+        current = node;
+      }
+      return { fen: startFen, move: 'Start', children: [current] };
+    };
+
+    const branch = buildTree(moves);
+    setImportedBranch(branch);
+    setShowImportModal(false);
+    setImportPgnText('');
+  }, [importPgnText]);
+
   // Derived
   const isWhiteTurn = gameRef.current.turn() === 'w';
   const perspScore = isWhiteTurn ? evalNum : -evalNum;
@@ -299,7 +326,7 @@ export default function TreeEditor() {
   if (!treeMeta) return <div style={{ padding: 20 }}>Tree not found.</div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 2.5rem)', gap: '1rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 4rem)', gap: '1rem' }}>
 
 
       {/* Share Modal */}
@@ -417,48 +444,89 @@ export default function TreeEditor() {
         </div>
       )}
 
+      {/* Import Modal */}
+      {showImportModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '1rem'
+        }}>
+          <div className="card animate-fade-in" style={{ maxWidth: 500, width: '100%', position: 'relative' }}>
+            <button onClick={() => { setShowImportModal(false); setImportPgnText(''); }} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+              <X size={24} />
+            </button>
+            <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Import size={24} color="var(--accent-color)" />
+              Import Lichess Game
+            </h2>
+            <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
+              Paste a PGN from a Lichess export to preview it as a branch. This won't be saved until you copy moves to your repertoire.
+            </p>
+
+            <textarea
+              className="input"
+              placeholder="Paste PGN here..."
+              value={importPgnText}
+              onChange={(e) => setImportPgnText(e.target.value)}
+              style={{ width: '100%', minHeight: 200, fontFamily: 'monospace', fontSize: '0.8rem' }}
+            />
+
+            <button
+              onClick={handleImport}
+              className="btn"
+              style={{ width: '100%', marginTop: '1rem' }}
+            >
+              Preview Branch
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button onClick={() => navigate('/')} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
-          <div>
+          <div style={{ flex: showMenu ? 0 : undefined, overflow: 'hidden', transition: 'flex 0.3s ease' }}>
             <h2 style={{ margin: 0, fontSize: '1.2rem', borderBottom: treeMeta.color === 'white' ? '5px solid #fff' : '5px solid #444444ff', display: 'inline-block', lineHeight: '1.3' }}>{treeMeta.title}</h2>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-          <TooltipButton
-            tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"}
-            onClick={() => {
-              setDeleteMode(!isDeleteMode);
-            }}
-            className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}
-          >
-            <Trash2 size={20} />
-          </TooltipButton>
-          <TooltipButton
-            tooltip="Share Repertoire"
-            onClick={() => setShowShareModal(true)}
-            className="btn btn-icon btn-secondary"
-          >
-            <Share2 size={20} />
-          </TooltipButton>
-          {/* Divider */}
-          <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
-          {!viewOnly ? (
-            <TooltipButton
-              tooltip={saving ? "Saving..." : "Save Progress"}
-              onClick={handleSave}
-              className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`}
-              style={{ opacity: saving ? 0.5 : 1 }}
-            >
-              <Save size={20} />
-            </TooltipButton>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-              <Users size={16} className="text-muted" />
-              <span className="text-xs text-muted" style={{ fontWeight: 600 }}>READ ONLY</span>
-            </div>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          {/* Mobile-only hamburger menu */}
+          {window.innerWidth <= 768 && (
+            <button onClick={() => setShowMenu(!showMenu)} className="btn btn-icon btn-secondary">
+              <Menu size={20} />
+            </button>
           )}
+          {/* Desktop: always show buttons | Mobile: show dropdown when menu open */}
+          {window.innerWidth > 768 ? (
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => setDeleteMode(!isDeleteMode)} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
+              <TooltipButton tooltip="Share Repertoire" onClick={() => setShowShareModal(true)} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+              <TooltipButton tooltip="Import Lichess PGN" onClick={() => setShowImportModal(true)} className="btn btn-icon btn-secondary"><Import size={20} /></TooltipButton>
+              <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
+              {!viewOnly ? (
+                <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={handleSave} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <Users size={16} className="text-muted" /><span className="text-xs text-muted" style={{ fontWeight: 600 }}>READ</span>
+                </div>
+              )}
+            </div>
+          ) : showMenu ? (
+            <div style={{ position: 'absolute', top: 56, right: 8, backgroundColor: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.5rem', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => { setDeleteMode(!isDeleteMode); setShowMenu(false); }} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
+              <TooltipButton tooltip="Share Repertoire" onClick={() => { setShowShareModal(true); setShowMenu(false); }} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+              <TooltipButton tooltip="Import Lichess PGN" onClick={() => { setShowImportModal(true); setShowMenu(false); }} className="btn btn-icon btn-secondary"><Import size={20} /></TooltipButton>
+              <div style={{ width: '100%', height: 1, backgroundColor: 'var(--border-color)', margin: '4px 0' }} />
+              {!viewOnly ? (
+                <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={() => { handleSave(); setShowMenu(false); }} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <Users size={16} className="text-muted" /><span className="text-xs text-muted" style={{ fontWeight: 600 }}>READ</span>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -584,6 +652,7 @@ export default function TreeEditor() {
               currentFen={currentFen}
               onNodeClick={handleNodeClick}
               isDeleteMode={isDeleteMode}
+              importedBranch={importedBranch}
             />
           )}
         </div>

@@ -18,7 +18,6 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 
 Notes:
 - Under Shared with me remove create tree button and just say no trees shared with you
-- Allign the Tree name and Position / to the left in Review
 - Lets create a public list for trees that people can browse and use
 - under the tree name in the tree editor, under share add a button to make the tree public for read access 
 

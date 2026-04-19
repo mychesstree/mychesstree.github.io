@@ -1,4 +1,4 @@
-import { ReactNode, MouseEvent } from 'react';
+import type { ReactNode, MouseEvent, FocusEventHandler } from 'react';
 import { useTooltip } from './TooltipContext';
 
 interface TooltipButtonProps {
@@ -21,14 +21,29 @@ export default function TooltipButton({ children, tooltip, className, onClick, s
     hideTooltip();
   };
 
+  const handleFocus: FocusEventHandler<HTMLButtonElement> = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    showTooltip(tooltip, rect.left + rect.width / 2, rect.top);
+  };
+
+  const handleBlur = () => {
+    hideTooltip();
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    showTooltip(tooltip, rect.left + rect.width / 2, rect.top);
+    if (onClick) onClick();
+  };
+
   return (
     <button
       className={className}
-      onClick={onClick}
+      onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      onFocus={handleMouseEnter}
-      onBlur={handleMouseLeave}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       style={style}
     >
       {children}

@@ -15,6 +15,7 @@ interface ForceTreeProps {
   currentFen: string;
   onNodeClick: (node: any) => void;
   isDeleteMode?: boolean;
+  importedBranch?: TreeNode | null;
 }
 
 function pathToNode(root: TreeNode, targetFen: string): Set<string> {
@@ -38,11 +39,24 @@ function assignDepths(node: TreeNode, depth = 0, depthMap = new Map<string, numb
   return depthMap;
 }
 
-export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode }: ForceTreeProps) {
+export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode, importedBranch }: ForceTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [focusMode, setFocusMode] = useState(false);
   const activePath = useMemo(() => pathToNode(data, currentFen), [data, currentFen]);
+
+  const importedFens = useMemo(() => {
+    if (!importedBranch) return new Set<string>();
+    const fens = new Set<string>();
+    const collect = (node: TreeNode) => {
+      fens.add(node.fen);
+      node.children.forEach(collect);
+    };
+    if (importedBranch.children.length > 0) {
+      importedBranch.children.forEach(collect);
+    }
+    return fens;
+  }, [importedBranch]);
 
   const draw = useCallback(() => {
     if (!data || !svgRef.current || !containerRef.current) return;
@@ -52,24 +66,57 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode 
     const depthMap = assignDepths(data);
     const tempNodesMap = new Map();
 
-    function buildGraph(node: TreeNode, parentFen: string | null = null) {
+    function buildGraph(node: TreeNode, parentFen: string | null = null, isImported = false) {
       const depth = depthMap.get(node.fen) ?? 0;
       const onPath = activePath.has(node.fen);
       const isVisible = !focusMode || onPath || (parentFen && activePath.has(parentFen));
 
       if (isVisible) {
         if (!tempNodesMap.has(node.fen)) {
-          const n = { id: node.fen, fen: node.fen, move: node.move ?? 'Start', isPending: !!node.isPending, depth, onPath };
+          const importedFlag = importedFens.has(node.fen);
+          const n = { id: node.fen, fen: node.fen, move: node.move ?? 'Start', isPending: !!node.isPending, depth, onPath, isImported: importedFlag };
           tempNodesMap.set(node.fen, n);
           nodes.push(n);
         }
         if (parentFen && tempNodesMap.has(parentFen)) {
-          links.push({ source: parentFen, target: node.fen, isPending: !!node.isPending, onPath: onPath && activePath.has(parentFen) });
+          const importedFlag = importedFens.has(node.fen);
+          links.push({ source: parentFen, target: node.fen, isPending: !!node.isPending, onPath: onPath && activePath.has(parentFen), isImported: importedFlag });
         }
       }
-      for (const child of node.children) buildGraph(child, node.fen);
+      for (const child of node.children) buildGraph(child, node.fen, isImported);
     }
     buildGraph(data);
+
+    // Add imported branch nodes
+    if (importedBranch && importedBranch.children.length > 0) {
+      const startFen = data.fen.split(' ')[0];
+      for (const branch of importedBranch.children) {
+        const parentFen = startFen;
+
+        if (!tempNodesMap.has(parentFen)) {
+          const n = { id: parentFen, fen: parentFen, move: 'Start', isPending: false, depth: 0, onPath: activePath.has(parentFen), isImported: false };
+          tempNodesMap.set(parentFen, n);
+          nodes.push(n);
+        }
+
+        links.push({ source: parentFen, target: branch.fen, isPending: false, onPath: false, isImported: true });
+
+        const buildImportNode = (node: TreeNode, depth: number) => {
+          if (!tempNodesMap.has(node.fen)) {
+            const n = { id: node.fen, fen: node.fen, move: node.move ?? '', isPending: false, depth, onPath: false, isImported: true };
+            tempNodesMap.set(node.fen, n);
+            nodes.push(n);
+          }
+          for (const child of node.children) {
+            if (!tempNodesMap.has(child.fen)) {
+              links.push({ source: node.fen, target: child.fen, isPending: false, onPath: false, isImported: true });
+            }
+            buildImportNode(child, depth + 1);
+          }
+        };
+        buildImportNode(branch, 1);
+      }
+    }
 
     const el = svgRef.current;
     const containerWidth = containerRef.current.clientWidth || 600;
@@ -112,7 +159,7 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode 
     if (rootNode) { rootNode.fx = 100; rootNode.fy = height / 2; }
 
     const link = g.append('g').selectAll('line').data(links).enter().append('line')
-      .attr('stroke', (d: any) => d.onPath ? 'white' : d.isPending ? '#f59e0b' : 'var(--border-color-focus)')
+      .attr('stroke', (d: any) => d.isImported ? '#22d3ee' : d.onPath ? 'white' : d.isPending ? '#f59e0b' : 'var(--border-color-focus)')
       .attr('stroke-width', (d: any) => d.onPath ? 4 : 2)
       .attr('stroke-dasharray', (d: any) => d.isPending ? '6,4' : '0')
       .attr('stroke-opacity', (d: any) => d.onPath ? 1 : 0.4);
@@ -139,8 +186,8 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode 
       });
 
     node.append('circle').attr('r', (d: any) => d.fen === currentFen ? 12 : 8)
-      .attr('fill', (d: any) => d.fen === currentFen ? 'var(--accent-color)' : d.onPath ? 'white' : 'var(--panel-bg)')
-      .attr('stroke', (d: any) => d.onPath ? 'white' : 'var(--accent-color)')
+      .attr('fill', (d: any) => d.isImported ? '#22d3ee' : d.fen === currentFen ? 'var(--accent-color)' : d.onPath ? 'white' : 'var(--panel-bg)')
+      .attr('stroke', (d: any) => d.isImported ? '#22d3ee' : d.onPath ? 'white' : 'var(--accent-color)')
       .attr('stroke-width', (d: any) => d.onPath ? 3 : 2);
 
     node.append('text').text((d: any) => d.move ?? '').attr('dx', 0).attr('dy', -20)
@@ -160,7 +207,7 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode 
     });
 
     return () => { simulation.stop(); };
-  }, [data, currentFen, focusMode, activePath, onNodeClick, isDeleteMode]);
+  }, [data, currentFen, focusMode, activePath, onNodeClick, isDeleteMode, importedBranch]);
 
   useEffect(() => {
     return draw();

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid, Users } from 'lucide-react';
+import { Plus, GitMerge, LayoutGrid, Users, Info } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
 
@@ -11,6 +11,7 @@ interface Tree {
   title: string;
   color: 'white' | 'black';
   created_at: string;
+  cards_due?: number;
 }
 
 export default function Dashboard() {
@@ -36,7 +37,6 @@ export default function Dashboard() {
     if (viewMode === 'owned') {
       query = query.eq('user_id', user.id);
     } else {
-      // Fetch trees where user is in tree_shares
       const { data: sharedIds } = await supabase
         .from('tree_shares')
         .select('tree_id')
@@ -52,7 +52,18 @@ export default function Dashboard() {
     }
 
     const { data } = await query;
-    if (data) setTrees(data);
+
+    if (data) {
+      const treesWithDue = await Promise.all(data.map(async (tree) => {
+        const { count } = await supabase
+          .from('reviews')
+          .select('*', { count: 'exact', head: true })
+          .eq('tree_id', tree.id)
+          .lte('next_review', new Date().toISOString());
+        return { ...tree, cards_due: count || 0 };
+      }));
+      setTrees(treesWithDue);
+    }
     setLoading(false);
   };
 
@@ -167,30 +178,47 @@ export default function Dashboard() {
           {trees.map((tree) => (
             <div key={tree.id} className="card flex flex-col justify-between" style={{ transition: 'transform 0.2s', padding: '1.5rem' }}>
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 style={{ margin: 0 }}>{tree.title}</h3>
-                  <span style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '1rem',
-                    fontSize: '0.75rem',
-                    backgroundColor: tree.color === 'white' ? '#f3f4f6' : '#374151',
-                    color: tree.color === 'white' ? '#111827' : '#f3f4f6',
-                    fontWeight: 600
-                  }}>
-                    {tree.color.toUpperCase()}
-                  </span>
+                <div className="flex items-center justify-between mb-4" style={{ position: 'relative' }}>
+                  <h3 style={{ margin: 0, borderBottom: tree.color === 'white' ? '3px solid #fff' : '3px solid #777', display: 'inline-block', lineHeight: '1.4' }}>{tree.title}</h3>
+                  <TooltipButton
+                    tooltip={`Created ${new Date(tree.created_at).toLocaleDateString()}`}
+                    onClick={() => {}}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'help',
+                      color: 'var(--text-muted)'
+                    }}
+                  >
+                    <Info size={16} />
+                  </TooltipButton>
                 </div>
-                <p className="text-muted text-sm mb-4">
-                  Created {new Date(tree.created_at).toLocaleDateString()}
-                </p>
               </div>
               <div className="flex gap-2">
                 <Link to={`/editor/${tree.id}`} className="btn" style={{ flex: 1 }}>
                   <GitMerge size={16} />
-                  Edit Tree
+                  Edit
                 </Link>
-                <Link to={`/review/${tree.id}`} className="btn btn-secondary">
+                <Link to={`/review/${tree.id}`} className="btn btn-secondary" style={{ position: 'relative' }}>
                   Review
+                  {tree.cards_due !== undefined && tree.cards_due > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -8,
+                      right: -8,
+                      backgroundColor: 'var(--accent-color)',
+                      color: 'white',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '10px',
+                      minWidth: 18,
+                      textAlign: 'center'
+                    }}>
+                      {tree.cards_due}
+                    </span>
+                  )}
                 </Link>
               </div>
             </div>
