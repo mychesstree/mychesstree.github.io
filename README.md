@@ -13,9 +13,14 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 ![Lucide](https://img.shields.io/badge/Lucide-Pink?style=for-the-badge&logo=lucide&logoColor=white)
 
 
-in the Dashboard lets add a notification dot to the top right of the review button if there are things due
 
 Lets fix import data from lichess as right now it doesn't detect the moves correctly and says there are no valid moves. lets make the temporary branches appear as a dotted white
+
+------
+
+Lets add an export button that allows the user to export their tree data and review data
+
+Lets add a continue as guest (which limits the user to only use the app without any supabase involvement) the user needs to import and export their tree data manually. Lets add this export button to share button in tree editor. must create free account to save (data is deleted daily for guests)
 
 
 Notes:
@@ -25,7 +30,6 @@ Notes:
 
 - import data from lichess and export data (free unlimited) review as well
 
-- continue as guest (limited to 1 tree) add export button to share button in tree editor. must create free account to save (data is deleted daily for guests)
 
 - Bughouse mode
 

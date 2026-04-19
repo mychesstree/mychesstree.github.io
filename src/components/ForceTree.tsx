@@ -159,9 +159,9 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
     if (rootNode) { rootNode.fx = 100; rootNode.fy = height / 2; }
 
     const link = g.append('g').selectAll('line').data(links).enter().append('line')
-      .attr('stroke', (d: any) => d.isImported ? '#22d3ee' : d.onPath ? 'white' : d.isPending ? '#f59e0b' : 'var(--border-color-focus)')
+      .attr('stroke', (d: any) => d.isImported ? '#fff' : d.onPath ? 'white' : d.isPending ? '#f59e0b' : 'var(--border-color-focus)')
       .attr('stroke-width', (d: any) => d.onPath ? 4 : 2)
-      .attr('stroke-dasharray', (d: any) => d.isPending ? '6,4' : '0')
+      .attr('stroke-dasharray', (d: any) => d.isImported ? '4,4' : d.isPending ? '6,4' : '0')
       .attr('stroke-opacity', (d: any) => d.onPath ? 1 : 0.4);
 
     const node = g.append('g').selectAll('g').data(nodes).enter().append('g')
@@ -186,8 +186,18 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
       });
 
     node.append('circle').attr('r', (d: any) => d.fen === currentFen ? 12 : 8)
-      .attr('fill', (d: any) => d.isImported ? '#22d3ee' : d.fen === currentFen ? 'var(--accent-color)' : d.onPath ? 'white' : 'var(--panel-bg)')
-      .attr('stroke', (d: any) => d.isImported ? '#22d3ee' : d.onPath ? 'white' : 'var(--accent-color)')
+      .attr('fill', (d: any) => {
+        if (d.isImported) return '#fff';
+        if (d.fen === currentFen) return 'var(--accent-color)';
+        // Color based on whose turn it is at this position
+        const isWhiteTurn = d.fen.split(' ')[1] === 'w';
+        return isWhiteTurn ? '#fff' : '#333';
+      })
+      .attr('stroke', (d: any) => {
+        if (d.isImported) return '#fff';
+        if (d.onPath) return '#fff';
+        return 'var(--accent-color)';
+      })
       .attr('stroke-width', (d: any) => d.onPath ? 3 : 2);
 
     node.append('text').text((d: any) => d.move ?? '').attr('dx', 0).attr('dy', -20)

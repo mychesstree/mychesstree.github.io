@@ -56,29 +56,55 @@ function deleteNodeFromTree(parent: TreeNode, targetFen: string): boolean {
   return false;
 }
 
-function parsePgnMoves(pgn: string): string[] {
-  const moves: string[] = [];
-  const game = new Chess();
-
+function parsePgnMoves(pgn: string): { moves: string[]; finalFen: string } {
+  // Extract just the move text
   const moveText = pgn
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/\{[^}]*\}/g, '')
-    .replace(/\d+\.\s*\.\./g, ' ')
-    .replace(/\d+\.\s*/g, ' ')
+    .replace(/\[[^\]]*\]/g, '')      // Remove [Event "..."] headers
+    .replace(/\{[^}]*\}/g, '')       // Remove {comment} annotations  
+    .replace(/\d+\.\s*\.\./g, ' ')  // Remove "1. ..." ellipsis
+    .replace(/\d+\.\s*/g, ' ')       // Remove "1. " move numbers
     .trim();
 
+  // Split into tokens - extract all potential moves
   const tokens = moveText.split(/\s+/);
+  const rawMoves: string[] = [];
+  
   for (const token of tokens) {
-    const clean = token.replace(/[^a-zA-Z+#]/g, '');
+    // Remove result markers and keep only chess notation
+    let clean = token.replace(/[^a-hKQRBNP12345678O=?+#]/g, '');
     if (!clean || clean.length < 2) continue;
-    if (['1-0', '0-1', '1/2-1/2', '*'].includes(clean)) continue;
-    try {
-      const move = game.move(clean);
-      if (move) moves.push(clean);
-    } catch { /* skip */ }
+    if (clean === '1-0' || clean === '0-1' || clean === '1/2-1/2' || clean === '*') continue;
+    rawMoves.push(clean);
   }
 
-  return moves;
+  // Try to build move list by playing on a chess board
+  const validMoves: string[] = [];
+  const game = new Chess();
+  
+  for (const move of rawMoves) {
+    try {
+      const result = game.move(move);
+      if (result) {
+        validMoves.push(move);
+      }
+    } catch {
+      // If exact match fails, try fuzzy match
+      const possible = game.moves({ verbose: true });
+      const matched = possible.find(m => 
+        m.san === move || 
+        m.san.replace(/[+#?!=]/g, '') === move.replace(/[+#?!=]/g, '') ||
+        m.san.startsWith(move.replace(/[+#?!=]/g, ''))
+      );
+      if (matched) {
+        try {
+          game.move(matched.san);
+          validMoves.push(matched.san);
+        } catch {}
+      }
+    }
+  }
+
+  return { moves: validMoves, finalFen: game.fen() };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -118,6 +144,53 @@ export default function TreeEditor() {
   // Chess Ref
   const gameRef = useRef(new Chess());
   const [currentFen, setCurrentFen] = useState(() => gameRef.current.fen());
+
+  // Keyboard navigation - left/right arrows
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!treeData) return;
+      
+      // Find current node in tree
+      const findNode = (node: TreeNode, fen: string): TreeNode | null => {
+        if (node.fen === fen) return node;
+        for (const child of node.children) {
+          const found = findNode(child, fen);
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const currentNode = findNode(treeData, currentFen);
+      if (!currentNode) return;
+
+      if (e.key === 'ArrowRight') {
+        // Go to first child (next move)
+        if (currentNode.children.length > 0) {
+          const nextNode = currentNode.children[0];
+          gameRef.current = new Chess(nextNode.fen);
+          setCurrentFen(nextNode.fen);
+        }
+      } else if (e.key === 'ArrowLeft') {
+        // Go to parent
+        const findParent = (node: TreeNode, targetFen: string, parent: TreeNode | null): TreeNode | null => {
+          if (node.fen === targetFen) return parent;
+          for (const child of node.children) {
+            const found = findParent(child, targetFen, node);
+            if (found) return found;
+          }
+          return null;
+        };
+        const parentNode = findParent(treeData, currentFen, null);
+        if (parentNode) {
+          gameRef.current = new Chess(parentNode.fen);
+          setCurrentFen(parentNode.fen);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [treeData, currentFen]);
 
   // Engine
   const engineRef = useRef<Worker | null>(null);
@@ -292,25 +365,47 @@ export default function TreeEditor() {
   const handleImport = useCallback(() => {
     const pgn = importPgnText.trim();
     if (!pgn) return;
-    const moves = parsePgnMoves(pgn);
+    const { moves } = parsePgnMoves(pgn);
     if (moves.length === 0) {
       alert('No valid moves found in PGN');
       return;
     }
-    console.log('Importing moves:', moves);
 
+    // Build full tree from start position - each move gets its own node
     const buildTree = (moveList: string[]): TreeNode => {
-      const game = new Chess();
-      const startFen = game.fen();
-      let current: TreeNode = { fen: startFen, move: 'Start', children: [] };
-
-      for (let i = 0; i < moveList.length; i++) {
-        game.move(moveList[i]);
-        const node: TreeNode = { fen: game.fen(), move: moveList[i], children: [] };
-        current.children.push(node);
-        current = node;
+      const startGame = new Chess();
+      const startFen = startGame.fen();
+      
+      // Root node at start position
+      const root: TreeNode = { fen: startFen, move: 'Start', children: [] };
+      
+      // Track all nodes at each depth
+      const depthMap = new Map<string, TreeNode>();
+      depthMap.set(startFen, root);
+      
+      // Process each move from the initial position
+      const currentGame = new Chess();
+      let node: TreeNode = root;
+      
+      for (const moveSAN of moveList) {
+        try {
+          const result = currentGame.move(moveSAN);
+          if (result) {
+            const newFen = currentGame.fen();
+            const newNode: TreeNode = {
+              fen: newFen,
+              move: result.san,
+              children: []
+            };
+            node.children.push(newNode);
+            node = newNode;
+          }
+        } catch (e) {
+          console.log('Could not make move:', moveSAN);
+        }
       }
-      return { fen: startFen, move: 'Start', children: [current] };
+
+      return root;
     };
 
     const branch = buildTree(moves);
