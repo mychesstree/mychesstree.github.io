@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -11,6 +12,12 @@ export default function Login() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
+  const { loginAsGuest } = useAuth();
+
+  const handleGuestLogin = () => {
+    loginAsGuest();
+    navigate('/');
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +152,19 @@ export default function Login() {
             {mode === 'signin' ? "Don't have an account? Sign Up" : 'Back to Sign In'}
           </button>
         </div>
+
+        {mode === 'signin' && (
+          <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+            <button
+              type="button"
+              onClick={handleGuestLogin}
+              className="btn btn-secondary"
+              style={{ width: '100%' }}
+            >
+              Continue as Guest
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

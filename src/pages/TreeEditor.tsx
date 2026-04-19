@@ -164,14 +164,45 @@ export default function TreeEditor() {
       if (!currentNode) return;
 
       if (e.key === 'ArrowRight') {
-        // Go to first child (next move)
+        // Go to first child (next move) - check tree first, then imported branch
         if (currentNode.children.length > 0) {
           const nextNode = currentNode.children[0];
           gameRef.current = new Chess(nextNode.fen);
           setCurrentFen(nextNode.fen);
+        } else if (importedBranch && importedBranch.children.length > 0) {
+          // Check if we're at the diverge point (importedBranch.fen)
+          if (currentFen === importedBranch.fen && importedBranch.children.length > 0) {
+            const branchNode = importedBranch.children[0];
+            gameRef.current = new Chess(branchNode.fen);
+            setCurrentFen(branchNode.fen);
+          }
         }
       } else if (e.key === 'ArrowLeft') {
-        // Go to parent
+        // Go to parent - check if we're in an imported branch
+        if (importedBranch && importedBranch.children.length > 0) {
+          const isInImportedBranch = (fen: string): boolean => {
+            const checkNode = (node: TreeNode): boolean => {
+              if (node.fen === fen) return true;
+              for (const child of node.children) {
+                if (checkNode(child)) return true;
+              }
+              return false;
+            };
+            for (const child of importedBranch.children) {
+              if (checkNode(child)) return true;
+            }
+            return false;
+          };
+          
+          if (isInImportedBranch(currentFen)) {
+            // Go back to the diverge point
+            gameRef.current = new Chess(importedBranch.fen);
+            setCurrentFen(importedBranch.fen);
+            return;
+          }
+        }
+        
+        // Otherwise find parent in tree
         const findParent = (node: TreeNode, targetFen: string, parent: TreeNode | null): TreeNode | null => {
           if (node.fen === targetFen) return parent;
           for (const child of node.children) {
@@ -190,7 +221,7 @@ export default function TreeEditor() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [treeData, currentFen]);
+  }, [treeData, currentFen, importedBranch]);
 
   // Engine
   const engineRef = useRef<Worker | null>(null);

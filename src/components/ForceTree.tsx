@@ -87,34 +87,36 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
     }
     buildGraph(data);
 
-    // Add imported branch nodes
+    // Add imported branch nodes - spread vertically below attach point
     if (importedBranch && importedBranch.children.length > 0) {
-      const startFen = data.fen.split(' ')[0];
+      const divergeFen = importedBranch.fen;
+      const divergeNode = tempNodesMap.get(divergeFen);
+      
       for (const branch of importedBranch.children) {
-        const parentFen = startFen;
+        // Link to diverge point
+        links.push({ source: divergeFen, target: branch.fen, isPending: false, onPath: false, isImported: true });
 
-        if (!tempNodesMap.has(parentFen)) {
-          const n = { id: parentFen, fen: parentFen, move: 'Start', isPending: false, depth: 0, onPath: activePath.has(parentFen), isImported: false };
-          tempNodesMap.set(parentFen, n);
-          nodes.push(n);
-        }
-
-        links.push({ source: parentFen, target: branch.fen, isPending: false, onPath: false, isImported: true });
-
-        const buildImportNode = (node: TreeNode, depth: number) => {
+        let importedDepth = (divergeNode?.depth ?? 0) + 1;
+        
+        const buildImportNode = (node: TreeNode, depth: number, yIndex: number) => {
           if (!tempNodesMap.has(node.fen)) {
-            const n = { id: node.fen, fen: node.fen, move: node.move ?? '', isPending: false, depth, onPath: false, isImported: true };
+            // Add yOffset to spread nodes vertically - 60px per position in chain
+            const yOffset = yIndex * 60;
+            const n = { id: node.fen, fen: node.fen, move: node.move ?? '', isPending: false, depth, onPath: false, isImported: true, yOffset };
             tempNodesMap.set(node.fen, n);
             nodes.push(n);
           }
+          let childYIndex = 0;
           for (const child of node.children) {
             if (!tempNodesMap.has(child.fen)) {
               links.push({ source: node.fen, target: child.fen, isPending: false, onPath: false, isImported: true });
             }
-            buildImportNode(child, depth + 1);
+            buildImportNode(child, depth + 1, childYIndex);
+            childYIndex++;
           }
         };
-        buildImportNode(branch, 1);
+        // Start yIndex at 0 and increment for each branch
+        buildImportNode(branch, importedDepth, 0);
       }
     }
 
@@ -147,12 +149,13 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
     };
 
     const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(120).strength(0.8))
-      .force('charge', d3.forceManyBody().strength(-500).distanceMax(400))
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(80).strength(0.8))
+      .force('charge', d3.forceManyBody().strength(-300).distanceMax(300))
       // Spread nodes horizontally by depth
-      .force('x', d3.forceX((d: any) => (d.depth * 200) + 100).strength(1))
-      .force('y', d3.forceY(height / 2).strength(0.1))
-      .force('collision', d3.forceCollide(45))
+      .force('x', d3.forceX((d: any) => (d.depth * 150) + 100).strength(0.8))
+      // For imported nodes with yOffset, use that; otherwise center
+      .force('y', d3.forceY((d: any) => d.yOffset !== undefined ? (height / 2) + d.yOffset : height / 2).strength(0.5))
+      .force('collision', d3.forceCollide(35))
       .alphaDecay(0.04);
 
     const rootNode = nodes.find(n => n.depth === 0);

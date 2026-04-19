@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid, Users, Info } from 'lucide-react';
+import { Plus, GitMerge, LayoutGrid, Users, Info, AlertCircle } from 'lucide-react';
 import { Chess } from 'chess.js';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
@@ -23,7 +23,7 @@ interface Tree {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isGuest, loadGuestTrees, saveGuestTree } = useAuth();
   const [trees, setTrees] = useState<Tree[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -34,8 +34,19 @@ export default function Dashboard() {
 
   // Temporary declaration to fix the fallback before moving to useEffect
   const loadTrees = async () => {
-    if (!user) return;
     setLoading(true);
+
+    if (isGuest) {
+      const guestTrees = loadGuestTrees();
+      setTrees(guestTrees.map(t => ({
+        ...t,
+        cards_due: 0
+      })));
+      setLoading(false);
+      return;
+    }
+
+    if (!user) return;
 
     let query = supabase
       .from('trees')
@@ -101,23 +112,37 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadTrees();
-  }, [user, viewMode]);
+  }, [user, viewMode, isGuest]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const newTree = {
+      id: crypto.randomUUID(),
+      title: newTitle,
+      color: newColor,
+      created_at: new Date().toISOString(),
+      tree_data: {
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        children: []
+      }
+    };
+
+    if (isGuest) {
+      saveGuestTree(newTree);
+      navigate(`/editor/${newTree.id}`);
+      return;
+    }
+
     if (!user) return;
 
-    // Initial tree data is an empty object
     const { data, error } = await supabase
       .from('trees')
       .insert({
         user_id: user.id,
         title: newTitle,
         color: newColor,
-        tree_data: {
-          fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-          children: []
-        }
+        tree_data: newTree.tree_data
       })
       .select()
       .single();
@@ -135,32 +160,44 @@ export default function Dashboard() {
   return (
     <div className="animate-fade-in">
 
+      {isGuest && (
+        <div className="card mb-4" style={{ padding: '0.75rem 1rem', backgroundColor: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} style={{ color: '#fbbf24', flexShrink: 0 }} />
+            <p className="text-muted" style={{ margin: 0, fontSize: '0.8rem' }}>
+              Guest: Trees stored in this browser only
+              <Link to="/login" style={{ color: 'var(--accent-color)', marginLeft: '0.25rem' }}>Create account to save</Link>
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-3">
-          <TooltipButton
-            tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
-            onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}
-            className={`btn btn-icon ${viewMode === 'shared' ? '' : 'btn-secondary'}`}
-            style={{
-              borderRadius: '50%',
-              width: 38,
-              height: 38,
-              padding: 0,
-              backgroundColor: viewMode === 'shared' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)'
-            }}
-          >
-            {viewMode === 'owned' ? <LayoutGrid size={20} /> : <Users size={20} />}
-          </TooltipButton>
-          <h2 style={{ fontSize: '1.25rem', marginLeft: '0.5rem' }}>
-            {viewMode === 'owned' ? 'My Repertoire' : 'Shared with Me'}
+          {!isGuest && (
+            <TooltipButton
+              tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
+              onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}
+              className={`btn btn-icon ${viewMode === 'shared' ? '' : 'btn-secondary'}`}
+              style={{
+                borderRadius: '50%',
+                width: 38,
+                height: 38,
+                padding: 0,
+                backgroundColor: viewMode === 'shared' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)'
+              }}
+            >
+              {viewMode === 'owned' ? <LayoutGrid size={20} /> : <Users size={20} />}
+            </TooltipButton>
+          )}
+          <h2 style={{ fontSize: '1.25rem', marginLeft: isGuest ? 0 : '0.5rem' }}>
+            {isGuest ? 'My Trees' : (viewMode === 'owned' ? 'My Repertoire' : 'Shared with Me')}
           </h2>
         </div>
-        {viewMode === 'owned' && (
-          <button onClick={() => setIsCreating(true)} className="btn">
+        <button onClick={() => setIsCreating(true)} className="btn">
             <Plus size={18} />
             New Tree
           </button>
-        )}
       </div>
 
       {isCreating && (
@@ -232,21 +269,23 @@ export default function Dashboard() {
                   <GitMerge size={16} />
                   Edit
                 </Link>
-                <Link to={`/review/${tree.id}`} className="btn btn-secondary" style={{ position: 'relative' }}>
-                  Review
-                  {tree.cards_due! > 0 && (
-                    <span style={{
-                      position: 'absolute',
-                      top: -4,
-                      right: -4,
-                      width: 10,
-                      height: 10,
-                      backgroundColor: '#ef4444',
-                      borderRadius: '50%',
-                      border: '2px solid var(--panel-bg)'
-                    }} />
-                  )}
-                </Link>
+                {!isGuest && (
+                  <Link to={`/review/${tree.id}`} className="btn btn-secondary" style={{ position: 'relative' }}>
+                    Review
+                    {tree.cards_due! > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: -4,
+                        right: -4,
+                        width: 10,
+                        height: 10,
+                        backgroundColor: '#ef4444',
+                        borderRadius: '50%',
+                        border: '2px solid var(--panel-bg)'
+                      }} />
+                    )}
+                  </Link>
+                )}
               </div>
             </div>
           ))}

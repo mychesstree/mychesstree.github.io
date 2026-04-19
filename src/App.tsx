@@ -10,10 +10,10 @@ import Settings from './pages/Settings';
 import UpdatePassword from './pages/UpdatePassword';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const { user, isGuest, loading } = useAuth();
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading…</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user && !isGuest) return <Navigate to="/login" replace />;
 
   return <>{children}</>;
 };
