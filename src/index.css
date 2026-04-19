@@ -162,9 +162,10 @@ button {
   }
 }
 
-/* Tooltips */
+/* Tooltips - legacy CSS, buttons now use TooltipButton component */
 [data-tooltip] {
   position: relative;
+  cursor: inherit;
 }
 
 [data-tooltip]::after {
@@ -248,7 +249,7 @@ button {
   flex-shrink: 0;
   position: sticky;
   top: 0;
-  z-index: 1000;
+  z-index: 100;
 }
 
 .app-header-brand {
@@ -456,10 +457,17 @@ button {
   height: 100%;
   border-radius: 7px;
   overflow: hidden;
-  background-color: #111;
+  background-color: rgb(45, 45, 45);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
 }
 
 .eval-bar-fill {
@@ -622,7 +630,7 @@ button {
 /* ── Tooltip ─────────────────────────────────────────────── */
 [data-tooltip] {
   position: relative;
-  cursor: help;
+  cursor: pointer;
 }
 
 [data-tooltip]:before {

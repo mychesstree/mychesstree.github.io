@@ -5,7 +5,8 @@ import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import ForceTree, { type TreeNode } from '../components/ForceTree';
 import { useAuth } from '../hooks/useAuth';
-import { ArrowLeft, Save, Info, HelpCircle, X, ChevronRight, Play, Share2, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Save, Info, HelpCircle, X, ChevronRight, Play, Share2, Trash2, Users, Import } from 'lucide-react';
+import TooltipButton from '../components/TooltipButton';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
@@ -55,6 +56,35 @@ function deleteNodeFromTree(parent: TreeNode, targetFen: string): boolean {
   return false;
 }
 
+function parsePgnMoves(pgn: string): string[] {
+  const moves: string[] = [];
+  const game = new Chess();
+
+  const moveText = pgn
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\d+\.\s*\.\./g, ' ')
+    .replace(/\d+\.\s*/g, ' ')
+    .trim();
+
+  const tokens = moveText.split(/\s+/);
+  for (const token of tokens) {
+    const clean = token.replace(/[0-9*+-]/g, '');
+    if (!clean || clean === '1-0' || clean === '0-1' || clean === '1/2-1/2' || clean === '*') continue;
+    try {
+      const move = game.move(clean);
+      if (move) {
+        moves.push(clean);
+      }
+    } catch {}
+  }
+
+  const finalGame = new Chess();
+  for (let i = 0; i < moves.length; i++) {
+    finalGame.move(moves[i]);
+  }
+  return moves;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
   const { user } = useAuth();
@@ -76,6 +106,9 @@ export default function TreeEditor() {
   const [viewOnly, setViewOnly] = useState(false);
   const [existingShares, setExistingShares] = useState<any[]>([]);
   const [loadingShares, setLoadingShares] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importPgnText, setImportPgnText] = useState('');
+  const [importedBranch, setImportedBranch] = useState<TreeNode | null>(null);
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -389,38 +422,37 @@ export default function TreeEditor() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button onClick={() => navigate('/')} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>{treeMeta.title}</h2>
-            <span className="text-sm text-muted">Playing as {treeMeta.color}</span>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', borderBottom: treeMeta.color === 'white' ? '5px solid #fff' : '5px solid #444444ff', display: 'inline-block', lineHeight: '1.3' }}>{treeMeta.title}</h2>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-          <button
+          <TooltipButton
+            tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"}
             onClick={() => {
               setDeleteMode(!isDeleteMode);
             }}
             className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}
-            data-tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"}
           >
             <Trash2 size={20} />
-          </button>
-          <button
+          </TooltipButton>
+          <TooltipButton
+            tooltip="Share Repertoire"
             onClick={() => setShowShareModal(true)}
             className="btn btn-icon btn-secondary"
-            data-tooltip="Share Repertoire"
           >
             <Share2 size={20} />
-          </button>
+          </TooltipButton>
           {/* Divider */}
           <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
           {!viewOnly ? (
-            <button
+            <TooltipButton
+              tooltip={saving ? "Saving..." : "Save Progress"}
               onClick={handleSave}
               className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`}
-              disabled={saving}
-              data-tooltip={saving ? "Saving..." : "Save Progress"}
+              style={{ opacity: saving ? 0.5 : 1 }}
             >
               <Save size={20} />
-            </button>
+            </TooltipButton>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <Users size={16} className="text-muted" />

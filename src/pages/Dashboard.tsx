@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, GitMerge, LayoutGrid, Users } from 'lucide-react';
+import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
 
 interface Tree {
@@ -93,7 +94,8 @@ export default function Dashboard() {
 
       <div className="flex items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-3">
-          <button
+          <TooltipButton
+            tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
             onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}
             className={`btn btn-icon ${viewMode === 'shared' ? '' : 'btn-secondary'}`}
             style={{
@@ -103,10 +105,9 @@ export default function Dashboard() {
               padding: 0,
               backgroundColor: viewMode === 'shared' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)'
             }}
-            data-tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
           >
             {viewMode === 'owned' ? <LayoutGrid size={20} /> : <Users size={20} />}
-          </button>
+          </TooltipButton>
           <h2 style={{ fontSize: '1.25rem', marginLeft: '0.5rem' }}>
             {viewMode === 'owned' ? 'My Repertoire' : 'Shared with Me'}
           </h2>

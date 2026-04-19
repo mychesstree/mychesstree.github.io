@@ -17,14 +17,10 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 
 
 Notes:
-- disallow scrolling on forcetree
-- Fix tooltip showing up underneath edge of force map (should be on top of everything) make sure it doesn't get clipped in other objects
-- instead of playing as black make it a white vs black toggle that defaults to the original color of the tree (extend this to Dashboard)
 - Under Shared with me remove create tree button and just say no trees shared with you
 - Allign the Tree name and Position / to the left in Review
 - Lets create a public list for trees that people can browse and use
-- under the tree name in the tree editor, under share add a button to make the tree public for read access
-- fix the hover mouse tool tip showing a question mark at times when hovering over buttons
+- under the tree name in the tree editor, under share add a button to make the tree public for read access 
 
 - import data from lichess and export data (free unlimited) review as well
 

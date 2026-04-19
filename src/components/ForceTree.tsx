@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import { GitBranchPlus, GitBranch } from 'lucide-react';
+import TooltipButton from './TooltipButton';
 
 export interface TreeNode {
   fen: string;
@@ -166,19 +167,19 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode 
   }, [draw]);
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: '0.5rem', zIndex: 20 }}>
-        <button 
-          onClick={() => setFocusMode(f => !f)} 
+        <TooltipButton
+          tooltip={focusMode ? "Show All Branches" : "Focus Current Branch"}
+          onClick={() => setFocusMode(f => !f)}
           className="btn btn-secondary"
-          data-tooltip={focusMode ? "Show All Branches" : "Focus Current Branch"}
-          style={{ 
-            padding: 0, 
-            width: 36, 
-            height: 36, 
-            background: focusMode ? 'white' : 'rgba(0,0,0,0.5)', 
-            color: focusMode ? '#000' : '#fff', 
-            border: '1px solid var(--border-color)', 
+          style={{
+            padding: 0,
+            width: 36,
+            height: 36,
+            background: focusMode ? 'white' : 'rgba(0,0,0,0.5)',
+            color: focusMode ? '#000' : '#fff',
+            border: '1px solid var(--border-color)',
             borderRadius: '4px',
             display: 'flex',
             alignItems: 'center',
@@ -186,7 +187,7 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode 
           }}
         >
           {focusMode ? <GitBranchPlus size={20} /> : <GitBranch size={20} />}
-        </button>
+        </TooltipButton>
       </div>
       <svg ref={svgRef} style={{ display: 'block' }} />
       {isDeleteMode && (
