@@ -109,7 +109,7 @@ function parsePgnMoves(pgn: string): { moves: string[]; finalFen: string } {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
-  const { user } = useAuth();
+  const { user, isGuest, getGuestTree, saveGuestTree } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -275,34 +275,50 @@ export default function TreeEditor() {
 
   // Load Tree
   useEffect(() => {
-    if (!id || !user) return;
-    (async () => {
-      const { data, error } = await supabase.from('trees').select('*').eq('id', id).single();
-      if (error) console.error('Load tree error:', error);
-      if (data) {
-        setTreeMeta(data);
-        const root: TreeNode = data.tree_data ?? { fen: new Chess().fen(), children: [] };
+    if (!id) return;
+    
+    if (isGuest) {
+      // Guest user - load from localStorage
+      const tree = getGuestTree(id);
+      if (tree) {
+        setTreeMeta(tree);
+        const root: TreeNode = tree.tree_data ?? { fen: new Chess().fen(), children: [] };
         setTreeData(root);
         gameRef.current = new Chess(root.fen);
         setCurrentFen(root.fen);
-
-        // Logic check: are we the owner?
-        if (data.user_id !== user.id) {
-          const { data: share } = await supabase
-            .from('tree_shares')
-            .select('access_level')
-            .eq('tree_id', id)
-            .eq('user_id', user.id)
-            .single();
-
-          if (!share || share.access_level === 'read') {
-            setViewOnly(true);
-          }
-        }
+        setViewOnly(false); // Guests can edit their own trees
       }
       setLoading(false);
-    })();
-  }, [id, user]);
+    } else if (user) {
+      // Signed-in user - load from Supabase
+      (async () => {
+        const { data, error } = await supabase.from('trees').select('*').eq('id', id).single();
+        if (error) console.error('Load tree error:', error);
+        if (data) {
+          setTreeMeta(data);
+          const root: TreeNode = data.tree_data ?? { fen: new Chess().fen(), children: [] };
+          setTreeData(root);
+          gameRef.current = new Chess(root.fen);
+          setCurrentFen(root.fen);
+
+          // Logic check: are we the owner?
+          if (data.user_id !== user.id) {
+            const { data: share } = await supabase
+              .from('tree_shares')
+              .select('access_level')
+              .eq('tree_id', id)
+              .eq('user_id', user.id)
+              .single();
+
+            if (!share || share.access_level === 'read') {
+              setViewOnly(true);
+            }
+          }
+        }
+        setLoading(false);
+      })();
+    }
+  }, [id, user, isGuest, getGuestTree]);
 
   useEffect(() => {
     const eng = engineRef.current;
@@ -385,13 +401,30 @@ export default function TreeEditor() {
     if (!id || !treeData) return;
     setSaving(true);
     const cleaned = stripPending(treeData);
-    const { error } = await supabase.from('trees').update({ tree_data: cleaned, updated_at: new Date().toISOString() }).eq('id', id);
-    if (!error) {
-      setTreeData(cleaned);
-      setHasPending(false);
+    
+    if (isGuest) {
+      // Guest user - save to localStorage
+      const tree = getGuestTree(id);
+      if (tree) {
+        const updatedTree = {
+          ...tree,
+          tree_data: cleaned,
+          updated_at: new Date().toISOString()
+        };
+        saveGuestTree(updatedTree);
+        setTreeData(cleaned);
+        setHasPending(false);
+      }
+    } else {
+      // Signed-in user - save to Supabase
+      const { error } = await supabase.from('trees').update({ tree_data: cleaned, updated_at: new Date().toISOString() }).eq('id', id);
+      if (!error) {
+        setTreeData(cleaned);
+        setHasPending(false);
+      }
     }
     setSaving(false);
-  }, [id, treeData]);
+  }, [id, treeData, isGuest, getGuestTree, saveGuestTree]);
 
   const handleImport = useCallback(() => {
     const pgn = importPgnText.trim();

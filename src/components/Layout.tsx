@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import TutorialModal from './TutorialModal';
 
 export default function Layout() {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -14,6 +14,12 @@ export default function Layout() {
   const handleLogout = async () => {
     setIsDropdownOpen(false);
     await supabase.auth.signOut();
+  };
+
+  const handleLogin = () => {
+    setIsDropdownOpen(false);
+    // Navigate to login page or open login modal
+    window.location.href = '/login';
   };
 
   // Close on outside click
@@ -51,7 +57,7 @@ export default function Layout() {
               whiteSpace: 'nowrap',
               fontSize: '0.875rem',
             }}>
-              {user?.user_metadata?.username ?? user?.email ?? 'Profile'}
+              {isGuest ? 'Guest' : (user?.user_metadata?.username ?? user?.email ?? 'Profile')}
             </span>
             <ChevronDown
               size={14}
@@ -138,9 +144,9 @@ export default function Layout() {
                 How to Use
               </button>
 
-              {/* Sign out button */}
+              {/* Sign out / Login button */}
               <button
-                onClick={handleLogout}
+                onClick={isGuest ? handleLogin : handleLogout}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -149,7 +155,7 @@ export default function Layout() {
                   padding: '0.65rem 1rem',
                   background: 'none',
                   border: 'none',
-                  color: 'var(--error)',
+                  color: 'var(--accent-color)',
                   fontSize: '0.9rem',
                   cursor: 'pointer',
                   textAlign: 'left',
@@ -159,7 +165,7 @@ export default function Layout() {
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 <LogOut size={16} />
-                Sign Out
+                {isGuest ? 'Login' : 'Sign Out'}
               </button>
             </div>
           )}

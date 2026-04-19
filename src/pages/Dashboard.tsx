@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid, Users, Info, AlertCircle, Download, Upload, X } from 'lucide-react';
+import { Plus, GitMerge, LayoutGrid, Users, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2 } from 'lucide-react';
 import { Chess } from 'chess.js';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
@@ -33,7 +33,29 @@ export default function Dashboard() {
   const [showImportExportModal, setShowImportExportModal] = useState(false);
   const [importExportTab, setImportExportTab] = useState<'export' | 'import'>('export');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showGuestNotification, setShowGuestNotification] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (activeDropdown) {
+        setActiveDropdown(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeDropdown]);
 
   // Temporary declaration to fix the fallback before moving to useEffect
   const loadTrees = async () => {
@@ -144,6 +166,13 @@ export default function Dashboard() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validate tree name
+    const nameRegex = /^[a-zA-Z0-9]{3,10}$/;
+    if (!nameRegex.test(newTitle)) {
+      alert('Tree name must be 3-10 alphanumeric characters (letters and numbers only)');
+      return;
+    }
+
     const newTree = {
       id: crypto.randomUUID(),
       title: newTitle,
@@ -179,6 +208,29 @@ export default function Dashboard() {
     } else {
       console.error(error);
       alert('Failed to create tree');
+    }
+  };
+
+  const handleDeleteTree = async (treeId: string) => {
+    if (isGuest) {
+      // Guest user - delete from localStorage
+      const guestTrees = loadGuestTrees();
+      const updatedTrees = guestTrees.filter(t => t.id !== treeId);
+      localStorage.setItem('mychesstree_guest_trees', JSON.stringify(updatedTrees));
+      setDeleteConfirm(null);
+      setActiveDropdown(null);
+      loadTrees(); // Refresh the tree list
+    } else {
+      // Authenticated user - delete from Supabase
+      const { error } = await supabase.from('trees').delete().eq('id', treeId);
+      if (!error) {
+        setDeleteConfirm(null);
+        setActiveDropdown(null);
+        loadTrees(); // Refresh the tree list
+      } else {
+        console.error(error);
+        alert('Failed to delete tree');
+      }
     }
   };
 
@@ -389,16 +441,81 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-      )}    <div className="animate-fade-in">
+      )}
 
-        {isGuest && (
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '1rem'
+        }}>
+          <div className="card animate-fade-in" style={{ maxWidth: 400, width: '100%', border: '1px solid var(--error)' }}>
+            <h2 style={{ marginBottom: '1rem', color: '#ef4444' }}>Delete Tree?</h2>
+            <p style={{ marginBottom: '1.5rem' }}>
+              Are you sure you want to delete this tree? This action cannot be undone and all associated review data will be lost.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setDeleteConfirm(null)} 
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleDeleteTree(deleteConfirm)} 
+                className="btn"
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="animate-fade-in">
+
+        {isGuest && showGuestNotification && (
           <div className="card mb-4" style={{ padding: '0.75rem 1rem', backgroundColor: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.3)' }}>
-            <div className="flex items-center gap-2">
-              <AlertCircle size={16} style={{ color: '#ffffff', flexShrink: 0 }} />
-              <p className="text-muted" style={{ margin: 0, fontSize: '0.8rem' }}>
-                Trees are stored in this browser only
-                <Link to="/login" style={{ color: 'var(--accent-color)', marginLeft: '1rem' }}>Create account to save</Link>
-              </p>
+            <div className="flex items-center justify-between" style={{ gap: '0.5rem' }}>
+              <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
+                <AlertCircle size={16} style={{ color: '#ffffff', flexShrink: 0 }} />
+                <p className="text-muted" style={{ 
+                  margin: 0, 
+                  fontSize: '0.8rem',
+                  lineHeight: isMobile ? '1.2' : 'normal',
+                  display: isMobile ? 'block' : 'inline'
+                }}>
+                  {isMobile ? (
+                    <>
+                      Trees are stored in this browser only
+                      <br />
+                      <Link to="/login" style={{ color: 'var(--accent-color)' }}>Create account to save</Link>
+                    </>
+                  ) : (
+                    <>
+                      Trees are stored in this browser only
+                      <Link to="/login" style={{ color: 'var(--accent-color)', marginLeft: '1rem' }}>Create account to save</Link>
+                    </>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowGuestNotification(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  flexShrink: 0
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-main)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+              >
+                <X size={16} />
+              </button>
             </div>
           </div>
         )}
@@ -426,13 +543,21 @@ export default function Dashboard() {
             </h2>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setShowImportExportModal(true)} className="btn btn-secondary">
+            <button 
+              onClick={() => setShowImportExportModal(true)} 
+              className="btn btn-secondary"
+              title={isMobile ? "Import/Export" : undefined}
+            >
               <Download size={18} />
-              Import/Export
+              {!isMobile && " Import/Export"}
             </button>
-            <button onClick={() => setIsCreating(true)} className="btn">
+            <button 
+              onClick={() => setIsCreating(true)} 
+              className="btn"
+              title={isMobile ? "New Tree" : undefined}
+            >
               <Plus size={18} />
-              New Tree
+              {!isMobile && " New Tree"}
             </button>
           </div>
         </div>
@@ -486,19 +611,77 @@ export default function Dashboard() {
                 <div>
                   <div className="flex items-center justify-between mb-4" style={{ position: 'relative' }}>
                     <h3 style={{ margin: 0, borderBottom: tree.color === 'white' ? '3px solid #fff' : '3px solid #777', display: 'inline-block', lineHeight: '1.4' }}>{tree.title}</h3>
-                    <TooltipButton
-                      tooltip={`Created ${new Date(tree.created_at).toLocaleDateString()}`}
-                      onClick={() => { }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        cursor: 'help',
-                        color: 'var(--text-muted)'
-                      }}
-                    >
-                      <Info size={16} />
-                    </TooltipButton>
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDropdown(activeDropdown === tree.id ? null : tree.id);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: '4px',
+                          cursor: 'pointer',
+                          color: 'var(--text-muted)',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                      
+                      {activeDropdown === tree.id && (
+                        <div 
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            right: 0,
+                            marginTop: '4px',
+                            backgroundColor: 'var(--panel-bg)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 'var(--radius-md)',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            zIndex: 1000,
+                            minWidth: '200px'
+                          }}>
+                          <div style={{ padding: '8px 0' }}>
+                            <div style={{ 
+                              padding: '8px 16px', 
+                              fontSize: '0.8rem', 
+                              color: 'var(--text-muted)',
+                              borderBottom: '1px solid var(--border-color)',
+                              marginBottom: '4px'
+                            }}>
+                              Created: {new Date(tree.created_at).toLocaleDateString()}
+                            </div>
+                            <button
+                              onClick={() => {
+                                setDeleteConfirm(tree.id);
+                                setActiveDropdown(null);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px 16px',
+                                background: 'none',
+                                border: 'none',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                color: '#ef4444',
+                                fontSize: '0.9rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            >
+                              <Trash2 size={14} />
+                              Delete Tree
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
