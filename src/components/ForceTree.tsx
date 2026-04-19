@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
+import { GitBranchPlus, GitBranch } from 'lucide-react';
 
 export interface TreeNode {
   fen: string;
@@ -12,6 +13,7 @@ interface ForceTreeProps {
   data: TreeNode;
   currentFen: string;
   onNodeClick: (node: any) => void;
+  isDeleteMode?: boolean;
 }
 
 function pathToNode(root: TreeNode, targetFen: string): Set<string> {
@@ -35,7 +37,7 @@ function assignDepths(node: TreeNode, depth = 0, depthMap = new Map<string, numb
   return depthMap;
 }
 
-export default function ForceTree({ data, currentFen, onNodeClick }: ForceTreeProps) {
+export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode }: ForceTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [focusMode, setFocusMode] = useState(false);
@@ -85,6 +87,17 @@ export default function ForceTree({ data, currentFen, onNodeClick }: ForceTreePr
     const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 5]).on('zoom', e => g.attr('transform', e.transform));
     svg.call(zoom);
 
+    // Apply the current transform to the new group to prevent reset/snapback
+    const currentTransform = d3.zoomTransform(el);
+    g.attr('transform', currentTransform.toString());
+
+    const centerNode = (d: any) => {
+      const scale = d3.zoomTransform(el).k || 1;
+      const x = -d.x * scale + containerWidth / 2;
+      const y = -d.y * scale + height / 2;
+      svg.transition().duration(600).ease(d3.easeCubicOut).call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+    };
+
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id((d: any) => d.id).distance(120).strength(0.8))
       .force('charge', d3.forceManyBody().strength(-500).distanceMax(400))
@@ -104,7 +117,25 @@ export default function ForceTree({ data, currentFen, onNodeClick }: ForceTreePr
       .attr('stroke-opacity', (d: any) => d.onPath ? 1 : 0.4);
 
     const node = g.append('g').selectAll('g').data(nodes).enter().append('g')
-      .style('cursor', 'pointer').on('click', (_e, d) => onNodeClick(d));
+      .style('cursor', isDeleteMode ? 'crosshair' : 'pointer')
+      .on('click', (_e, d) => {
+        centerNode(d);
+        onNodeClick(d);
+      })
+      .on('mouseenter', (_e, d: any) => {
+        if (isDeleteMode && d.depth > 0) {
+          d3.select(_e.currentTarget).select('circle').transition().duration(200).attr('r', 15).attr('stroke', '#ef4444').attr('stroke-width', 3);
+        }
+      })
+      .on('mouseleave', (_e, d: any) => {
+        if (isDeleteMode && d.depth > 0) {
+          const isCurrent = d.fen === currentFen;
+          d3.select(_e.currentTarget).select('circle').transition().duration(200)
+            .attr('r', isCurrent ? 12 : 8)
+            .attr('stroke', d.onPath ? 'white' : 'var(--accent-color)')
+            .attr('stroke-width', d.onPath ? 3 : 2);
+        }
+      });
 
     node.append('circle').attr('r', (d: any) => d.fen === currentFen ? 12 : 8)
       .attr('fill', (d: any) => d.fen === currentFen ? 'var(--accent-color)' : d.onPath ? 'white' : 'var(--panel-bg)')
@@ -128,7 +159,7 @@ export default function ForceTree({ data, currentFen, onNodeClick }: ForceTreePr
     });
 
     return () => { simulation.stop(); };
-  }, [data, currentFen, focusMode, activePath, onNodeClick]);
+  }, [data, currentFen, focusMode, activePath, onNodeClick, isDeleteMode]);
 
   useEffect(() => {
     return draw();
@@ -136,10 +167,33 @@ export default function ForceTree({ data, currentFen, onNodeClick }: ForceTreePr
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <button onClick={() => setFocusMode(f => !f)} style={{ position: 'absolute', top: 12, right: 12, padding: '0.4rem 0.8rem', background: focusMode ? 'white' : 'rgba(0,0,0,0.5)', color: focusMode ? '#000' : '#fff', border: '1px solid var(--border-color)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', zIndex: 20 }}>
-        {focusMode ? 'SHOW ALL' : 'FOCUS BRANCH'}
-      </button>
+      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: '0.5rem', zIndex: 20 }}>
+        <button 
+          onClick={() => setFocusMode(f => !f)} 
+          className="btn btn-secondary"
+          data-tooltip={focusMode ? "Show All Branches" : "Focus Current Branch"}
+          style={{ 
+            padding: 0, 
+            width: 36, 
+            height: 36, 
+            background: focusMode ? 'white' : 'rgba(0,0,0,0.5)', 
+            color: focusMode ? '#000' : '#fff', 
+            border: '1px solid var(--border-color)', 
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {focusMode ? <GitBranchPlus size={20} /> : <GitBranch size={20} />}
+        </button>
+      </div>
       <svg ref={svgRef} style={{ display: 'block' }} />
+      {isDeleteMode && (
+        <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'rgba(239, 68, 68, 0.9)', color: 'white', padding: '0.5rem 1rem', borderRadius: '2rem', fontSize: '0.8rem', fontWeight: 600, pointerEvents: 'none', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)' }}>
+          DELETE MODE ACTIVE: CLICK A BRANCH TO REMOVE IT
+        </div>
+      )}
     </div>
   );
 }

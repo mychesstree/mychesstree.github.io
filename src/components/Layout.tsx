@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown, HelpCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import TutorialModal from './TutorialModal';
 
 export default function Layout() {
   const { user } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
@@ -39,11 +41,11 @@ export default function Layout() {
           <button
             onClick={() => setIsDropdownOpen(prev => !prev)}
             className="btn btn-secondary"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}
           >
             <UserIcon size={18} />
             <span style={{
-              maxWidth: 140,
+              maxWidth: 100,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -109,6 +111,33 @@ export default function Layout() {
                 Settings
               </Link>
 
+              {/* Tutorial Toggle */}
+              <button
+                onClick={() => {
+                  setIsDropdownOpen(false);
+                  setShowTutorial(true);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  width: '100%',
+                  padding: '0.65rem 1rem',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-main)',
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--panel-bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                <HelpCircle size={16} />
+                How to Use
+              </button>
+
               {/* Sign out button */}
               <button
                 onClick={handleLogout}
@@ -140,6 +169,8 @@ export default function Layout() {
       <main className="app-main">
         <Outlet />
       </main>
+
+      <TutorialModal isOpen={showTutorial} onClose={() => setShowTutorial(false)} />
     </div>
   );
 }

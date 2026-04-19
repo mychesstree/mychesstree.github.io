@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid } from 'lucide-react';
+import { Plus, GitMerge, LayoutGrid, Users } from 'lucide-react';
 import ReviewHeatmap from '../components/ReviewHeatmap';
 
 interface Tree {
@@ -19,24 +19,45 @@ export default function Dashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newColor, setNewColor] = useState<'white' | 'black'>('white');
+  const [viewMode, setViewMode] = useState<'owned' | 'shared'>('owned');
   const navigate = useNavigate();
 
   // Temporary declaration to fix the fallback before moving to useEffect
   const loadTrees = async () => {
     if (!user) return;
-    const { data } = await supabase
+    setLoading(true);
+
+    let query = supabase
       .from('trees')
       .select('*')
-      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
+    if (viewMode === 'owned') {
+      query = query.eq('user_id', user.id);
+    } else {
+      // Fetch trees where user is in tree_shares
+      const { data: sharedIds } = await supabase
+        .from('tree_shares')
+        .select('tree_id')
+        .eq('user_id', user.id);
+
+      const ids = (sharedIds || []).map(s => s.tree_id);
+      if (ids.length === 0) {
+        setTrees([]);
+        setLoading(false);
+        return;
+      }
+      query = query.in('id', ids);
+    }
+
+    const { data } = await query;
     if (data) setTrees(data);
     setLoading(false);
   };
 
   useEffect(() => {
     loadTrees();
-  }, [user]);
+  }, [user, viewMode]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,14 +92,31 @@ export default function Dashboard() {
     <div className="animate-fade-in">
 
       <div className="flex items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2">
-          <LayoutGrid size={18} className="text-accent" />
-          <h2 style={{ fontSize: '1.25rem', margin: 0 }}>My Repertoire</h2>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}
+            className={`btn btn-icon ${viewMode === 'shared' ? '' : 'btn-secondary'}`}
+            style={{
+              borderRadius: '50%',
+              width: 38,
+              height: 38,
+              padding: 0,
+              backgroundColor: viewMode === 'shared' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)'
+            }}
+            data-tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
+          >
+            {viewMode === 'owned' ? <LayoutGrid size={20} /> : <Users size={20} />}
+          </button>
+          <h2 style={{ fontSize: '1.25rem', marginLeft: '0.5rem' }}>
+            {viewMode === 'owned' ? 'My Repertoire' : 'Shared with Me'}
+          </h2>
         </div>
-        <button onClick={() => setIsCreating(true)} className="btn">
-          <Plus size={18} />
-          New Tree
-        </button>
+        {viewMode === 'owned' && (
+          <button onClick={() => setIsCreating(true)} className="btn">
+            <Plus size={18} />
+            New Tree
+          </button>
+        )}
       </div>
 
       {isCreating && (

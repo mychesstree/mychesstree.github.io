@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import ForceTree, { type TreeNode } from '../components/ForceTree';
-import { ArrowLeft, Save, Info, HelpCircle, X, ChevronRight, Play } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { ArrowLeft, Save, Info, HelpCircle, X, ChevronRight, Play, Share2, Trash2, Users } from 'lucide-react';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
@@ -27,8 +28,36 @@ function findNode(node: TreeNode, fen: string): TreeNode | null {
   return null;
 }
 
+function countNodes(node: TreeNode): number {
+  let count = 1;
+  for (const child of node.children) {
+    count += countNodes(child);
+  }
+  return count;
+}
+
+function hasDuplicateFen(root: TreeNode, targetFen: string, count = 0): number {
+  if (root.fen === targetFen) count++;
+  for (const child of root.children) {
+    count = hasDuplicateFen(child, targetFen, count);
+  }
+  return count;
+}
+
+function deleteNodeFromTree(parent: TreeNode, targetFen: string): boolean {
+  for (let i = 0; i < parent.children.length; i++) {
+    if (parent.children[i].fen === targetFen) {
+      parent.children.splice(i, 1);
+      return true;
+    }
+    if (deleteNodeFromTree(parent.children[i], targetFen)) return true;
+  }
+  return false;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
+  const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -37,8 +66,16 @@ export default function TreeEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasPending, setHasPending] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0, active: false });
+  const [isDeleteMode, setDeleteMode] = useState(false);
+  const [nodeToDelete, setNodeToDelete] = useState<any>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareUsername, setShareUsername] = useState('');
+  const [shareAccess, setShareAccess] = useState<'read' | 'edit'>('read');
+  const [shareStatus, setShareStatus] = useState({ type: '', msg: '' });
+  const [viewOnly, setViewOnly] = useState(false);
+  const [existingShares, setExistingShares] = useState<any[]>([]);
+  const [loadingShares, setLoadingShares] = useState(false);
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -79,9 +116,24 @@ export default function TreeEditor() {
     return () => worker?.terminate();
   }, []);
 
+  const loadShares = async () => {
+    if (!id || !user || !treeMeta?.user_id || user.id !== treeMeta.user_id) return;
+    setLoadingShares(true);
+    const { data } = await supabase
+      .from('tree_shares')
+      .select('*, users!tree_shares_user_id_fkey(username)')
+      .eq('tree_id', id);
+    setExistingShares(data || []);
+    setLoadingShares(false);
+  };
+
+  useEffect(() => {
+    if (showShareModal) loadShares();
+  }, [showShareModal, treeMeta?.user_id]);
+
   // Load Tree
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
     (async () => {
       const { data, error } = await supabase.from('trees').select('*').eq('id', id).single();
       if (error) console.error('Load tree error:', error);
@@ -91,10 +143,24 @@ export default function TreeEditor() {
         setTreeData(root);
         gameRef.current = new Chess(root.fen);
         setCurrentFen(root.fen);
+
+        // Logic check: are we the owner?
+        if (data.user_id !== user.id) {
+          const { data: share } = await supabase
+            .from('tree_shares')
+            .select('access_level')
+            .eq('tree_id', id)
+            .eq('user_id', user.id)
+            .single();
+
+          if (!share || share.access_level === 'read') {
+            setViewOnly(true);
+          }
+        }
       }
       setLoading(false);
     })();
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     const eng = engineRef.current;
@@ -140,9 +206,36 @@ export default function TreeEditor() {
   );
 
   const handleNodeClick = useCallback((nodeInfo: any) => {
+    if (isDeleteMode) {
+      if (nodeInfo.depth === 0) return; // Cannot delete root
+      setNodeToDelete(nodeInfo);
+      return;
+    }
     gameRef.current = new Chess(nodeInfo.fen);
     setCurrentFen(nodeInfo.fen);
-  }, []);
+  }, [isDeleteMode]);
+
+  const confirmDelete = useCallback(() => {
+    if (!nodeToDelete || !treeData) return;
+
+    setTreeData(prev => {
+      if (!prev) return prev;
+      const cloned = JSON.parse(JSON.stringify(prev));
+      const deleted = deleteNodeFromTree(cloned, nodeToDelete.fen);
+      if (deleted) {
+        setHasPending(true);
+      }
+      return cloned;
+    });
+
+    // Reset to start if deleted node was current position
+    if (currentFen === nodeToDelete.fen) {
+      gameRef.current = new Chess(treeData.fen);
+      setCurrentFen(treeData.fen);
+    }
+
+    setNodeToDelete(null);
+  }, [nodeToDelete, treeData, currentFen]);
 
 
 
@@ -175,29 +268,118 @@ export default function TreeEditor() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 2.5rem)', gap: '1rem' }}>
 
-      {/* Tutorial Overlay */}
-      {showTutorial && (
+
+      {/* Share Modal */}
+      {showShareModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
           backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
           alignItems: 'center', justifyContent: 'center', padding: '1rem'
         }}>
-          <div className="card animate-fade-in" style={{ maxWidth: 500, width: '100%', position: 'relative' }}>
-            <button onClick={() => setShowTutorial(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+          <div className="card animate-fade-in" style={{ maxWidth: 400, width: '100%', position: 'relative' }}>
+            <button onClick={() => setShowShareModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
               <X size={24} />
             </button>
             <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <HelpCircle size={24} color="var(--accent-color)" />
-              How to use MyChessTree
+              <Share2 size={24} color="var(--accent-color)" />
+              Share Tree
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <TutorialStep icon={<Play size={18} />} title="Build Your Tree" text="Make moves on the board to add them to your tree. New moves appear in yellow until saved." />
-              <TutorialStep icon={<Save size={18} />} title="Save Your Progress" text="Click 'Save' to commit your new moves to Supabase. This makes them permanent." />
-              <TutorialStep icon={<ChevronRight size={18} />} title="Analyze with Engine" text="Stockfish runs in your browser. The eval bar and red arrows show the best engine moves." />
-              <TutorialStep icon={<Info size={18} />} title="Navigation" text="Click nodes in the tree to jump to that position. Right-click the board to draw your own arrows." />
-              <TutorialStep icon={<Play size={18} />} title="Focus Mode" text="Use 'Focus Branch' in the tree view to hide other lines and stay focused on your current variations." />
+
+            <div className="input-group">
+              <label>Recipient Username</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Enter exact username"
+                value={shareUsername}
+                onChange={(e) => setShareUsername(e.target.value.toLowerCase())}
+              />
             </div>
-            <button onClick={() => setShowTutorial(false)} className="btn" style={{ width: '100%', marginTop: '2rem' }}>Got it!</button>
+
+            <div className="input-group">
+              <label>Access Level</label>
+              <select
+                className="input"
+                value={shareAccess}
+                onChange={(e) => setShareAccess(e.target.value as 'read' | 'edit')}
+              >
+                <option value="read">Can View (Read Only)</option>
+                <option value="edit">Can Edit & Save</option>
+              </select>
+            </div>
+
+            {shareStatus.msg && (
+              <div style={{
+                padding: '0.75rem',
+                borderRadius: 'var(--radius-md)',
+                fontSize: '0.85rem',
+                marginBottom: '1rem',
+                backgroundColor: shareStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                color: shareStatus.type === 'error' ? '#ef4444' : '#22c55e',
+                border: `1px solid ${shareStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)'}`
+              }}>
+                {shareStatus.msg}
+              </div>
+            )}
+
+            <button
+              onClick={async () => {
+                setShareStatus({ type: '', msg: '' });
+                try {
+                  const { data: resUser, error: userError } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('username', shareUsername)
+                    .single();
+
+                  if (userError || !resUser) throw new Error('User not found.');
+
+                  const { error: shareError } = await supabase
+                    .from('tree_shares')
+                    .upsert({ tree_id: id, user_id: resUser.id, access_level: shareAccess });
+
+                  if (shareError) throw shareError;
+                  setShareStatus({ type: 'success', msg: `Shared with ${shareUsername}!` });
+                  setShareUsername('');
+                  loadShares();
+                } catch (err: any) {
+                  setShareStatus({ type: 'error', msg: err.message });
+                }
+              }}
+              className="btn"
+              style={{ width: '100%' }}
+            >
+              Grant Access
+            </button>
+
+            {/* Existing Shares List */}
+            {user?.id === treeMeta.user_id && (
+              <div style={{ marginTop: '2rem' }}>
+                <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Current Collaborators</h4>
+                {loadingShares ? <div className="text-muted">Loading...</div> : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {existingShares.length === 0 ? <div className="text-muted text-sm">No shares yet.</div> : existingShares.map(s => (
+                      <div key={s.user_id} className="flex items-center justify-between" style={{ padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}>
+                        <div>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{s.users?.username || 'Unknown'}</div>
+                          <div className="text-muted text-xs uppercase">{s.access_level}</div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            await supabase.from('tree_shares').delete().eq('tree_id', id).eq('user_id', s.user_id);
+                            loadShares();
+                          }}
+                          className="btn btn-icon btn-secondary"
+                          style={{ color: '#ef4444' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -211,43 +393,112 @@ export default function TreeEditor() {
             <span className="text-sm text-muted">Playing as {treeMeta.color}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
-          <button 
-            onClick={() => setShowTutorial(true)} 
-            className="btn btn-secondary" 
-            style={{ padding: '0 0.75rem' }} 
-            title="Tutorial"
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+          <button
+            onClick={() => {
+              setDeleteMode(!isDeleteMode);
+            }}
+            className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}
+            data-tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"}
           >
-            <HelpCircle size={20} />
+            <Trash2 size={20} />
           </button>
-          <Link to={`/review/${id}`} className="btn btn-secondary" style={{ backgroundColor: 'var(--success)', color: 'white' }}>
-            <Play size={16} /> Review
-          </Link>
-          <button onClick={handleSave} className="btn" disabled={saving}>
-            <Save size={16} /> {saving ? 'Saving…' : 'Save'}
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="btn btn-icon btn-secondary"
+            data-tooltip="Share Repertoire"
+          >
+            <Share2 size={20} />
           </button>
+          {/* Divider */}
+          <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
+          {!viewOnly ? (
+            <button
+              onClick={handleSave}
+              className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`}
+              disabled={saving}
+              data-tooltip={saving ? "Saving..." : "Save Progress"}
+            >
+              <Save size={20} />
+            </button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <Users size={16} className="text-muted" />
+              <span className="text-xs text-muted" style={{ fontWeight: 600 }}>READ ONLY</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {nodeToDelete && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '1rem'
+        }}>
+          <div className="card animate-fade-in" style={{ maxWidth: 400, width: '100%', border: '1px solid var(--error)' }}>
+            <h2 style={{ marginBottom: '1rem', color: '#ef4444' }}>Prune Branch?</h2>
+            <p style={{ marginBottom: '1.5rem' }}>
+              Are you sure you want to delete the line starting with <strong>{nodeToDelete.move}</strong>?
+              <br /><br />
+              This will remove <strong>{countNodes(findNode(treeData!, nodeToDelete.fen)!)}</strong> moves from your repertoire.
+            </p>
+
+            {treeData && hasDuplicateFen(treeData, nodeToDelete.fen) > 1 && (
+              <div style={{ padding: '0.75rem', backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.2)', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#f59e0b' }}>
+                <strong>Note:</strong> This position appears in other parts of your tree. Deleting this branch only removes this specific history segment.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button
+                onClick={() => setNodeToDelete(null)}
+                className="btn btn-secondary"
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="btn btn-danger"
+                style={{ flex: 1, backgroundColor: '#ef4444' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Editor Body */}
       <div className="editor-layout">
         <div className="chess-pane-new">
 
 
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'stretch' }}>
-            {/* Eval Bar Container (handles dynamic tooltip) */}
-            <div 
+          <div className="chess-board-container">
+            {/* Eval Bar Container */}
+            <div
               onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY, active: true })}
               onMouseLeave={() => setMousePos(prev => ({ ...prev, active: false }))}
-              style={{ width: 14, height: '100%', position: 'relative', cursor: 'help' }}
+              className="eval-bar-wrapper"
+              data-tooltip="Engine Evaluation"
             >
-              <div style={{ width: '100%', height: '100%', borderRadius: 7, overflow: 'hidden', backgroundColor: '#111', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <div style={{ width: '100%', height: `${whitePercent}%`, backgroundColor: '#f5f5f5', transition: 'height 0.4s ease' }} />
+              <div className="eval-bar-bg">
+                <div
+                  className="eval-bar-fill"
+                  style={{
+                    // On desktop it's height, on mobile it's width
+                    height: window.innerWidth > 768 ? `${whitePercent}%` : '100%',
+                    width: window.innerWidth > 768 ? '100%' : `${whitePercent}%`,
+                    transition: 'all 0.4s ease'
+                  }}
+                />
               </div>
             </div>
 
-            {/* Dynamic Mouse Tooltip */}
-            {mousePos.active && (
+            {/* Dynamic Mouse Tooltip (Desktop only) */}
+            {mousePos.active && window.innerWidth > 768 && (
               <div style={{
                 position: 'fixed',
                 top: mousePos.y - 35,
@@ -264,7 +515,7 @@ export default function TreeEditor() {
                 boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
                 opacity: 0.95
               }}>
-                Eval: <strong>{perspScore >= 0 ? '+' : ''}{perspScore.toFixed(2)}</strong> 
+                Eval: <strong>{perspScore >= 0 ? '+' : ''}{perspScore.toFixed(2)}</strong>
                 <span style={{ margin: '0 8px', opacity: 0.3 }}>|</span>
                 Best: <strong>{bestMove || '…'}</strong>
               </div>
@@ -292,29 +543,20 @@ export default function TreeEditor() {
 
 
 
-          {hasPending && (
-            <div style={{ marginTop: '1rem', padding: '0.75rem', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Info size={16} /> You have unsaved moves in your tree. Click Save to keep them.
-            </div>
-          )}
         </div>
 
         <div className="tree-pane-new">
-          {treeData && <ForceTree data={treeData} currentFen={currentFen} onNodeClick={handleNodeClick} />}
+          {treeData && (
+            <ForceTree
+              data={treeData}
+              currentFen={currentFen}
+              onNodeClick={handleNodeClick}
+              isDeleteMode={isDeleteMode}
+            />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function TutorialStep({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return (
-    <div style={{ display: 'flex', gap: '1rem' }}>
-      <div style={{ color: 'var(--accent-color)', marginTop: 2 }}>{icon}</div>
-      <div>
-        <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 2 }}>{title}</div>
-        <div className="text-muted text-sm" style={{ lineHeight: 1.4 }}>{text}</div>
-      </div>
-    </div>
-  );
-}

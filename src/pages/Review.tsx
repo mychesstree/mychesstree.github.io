@@ -55,10 +55,10 @@ export default function Review() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [treeMeta, setTreeMeta] = useState<any>(null);
-  
+
   const gameRef = useRef(new Chess());
   const [currentFen, setCurrentFen] = useState(() => gameRef.current.fen());
-  
+
   const [flashcards, setFlashcards] = useState<ReviewCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -68,7 +68,7 @@ export default function Review() {
 
   const loadTreeAndGenerateCards = useCallback(async () => {
     if (!id) return;
-    
+
     // 1. Fetch metadata and tree data
     const { data: tree, error: treeErr } = await supabase.from('trees').select('*').eq('id', id).single();
     if (treeErr || !tree) {
@@ -104,18 +104,18 @@ export default function Review() {
           });
         }
       }
-      
+
       if (node.children) {
         node.children.forEach(child => traverse(child));
       }
     }
 
     if (tData) traverse(tData);
-    
+
     // Shuffle the due cards
     const shuffled = allMatchingCards.sort(() => Math.random() - 0.5);
     setFlashcards(shuffled);
-    
+
     if (shuffled.length > 0) {
       const startPos = shuffled[0];
       gameRef.current = new Chess(startPos.fen);
@@ -157,7 +157,7 @@ export default function Review() {
   const submitRating = async (rating: number) => {
     if (!treeMeta || !flashcards[currentIndex]) return;
     const card = flashcards[currentIndex];
-    
+
     // Always log history for accurate heatmap
     await supabase.from('review_logs').insert({
       tree_id: card.treeId,
@@ -206,7 +206,7 @@ export default function Review() {
     // We need to wait for state update to get the new flashcards[currentIndex]? 
     // No, we can just use the next item in the array for the immediate UI update
   };
-  
+
   // Update UI when flashcards or currentIndex change
   useEffect(() => {
     if (flashcards[currentIndex]) {
@@ -248,7 +248,7 @@ export default function Review() {
       <CheckCircle size={48} color="var(--success)" style={{ marginBottom: '1rem' }} />
       <h2>Review Complete!</h2>
       <p className="text-muted" style={{ marginTop: '0.5rem' }}>You've reviewed all available moves for this session.</p>
-      <div style={{ display:'flex', gap:'1rem', marginTop: '2rem', justifyContent:'center' }}>
+      <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'center' }}>
         <button onClick={() => navigate('/')} className="btn btn-secondary">Dashboard</button>
         <button onClick={() => loadTreeAndGenerateCards()} className="btn">Start Over</button>
       </div>
@@ -256,7 +256,7 @@ export default function Review() {
   );
 
   return (
-    <div className="review-container" style={{ display:'flex', flexDirection:'column', height: 'calc(100vh - var(--header-height) - 1.5rem)', gap: '1rem' }}>
+    <div className="review-container" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 1.5rem)', gap: '1rem' }}>
       <div className="review-layout">
         <div className="review-board-container">
           <div className="card" style={{ padding: '1rem', position: 'relative', overflow: 'hidden' }}>
@@ -280,18 +280,18 @@ export default function Review() {
         </div>
 
         <div className="review-info-container">
-          <div className="card" style={{ width: '100%', minHeight: 280, display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem' }}>
+          <div className="card" style={{ width: '100%', minHeight: 280, display: 'flex', flexDirection: 'column', padding: '1rem' }}>
             {/* Header elements moved inside the card */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-              <button 
-                onClick={() => navigate(`/editor/${id}`)} 
+            <div style={{ display: 'flex', width: '100%', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+              <button
+                onClick={() => navigate(`/editor/${id}`)}
                 className="btn btn-secondary btn-icon"
                 title="Back to Editor"
                 style={{ borderRadius: 'var(--radius-md)' }}
               >
                 <ArrowLeft size={20} />
               </button>
-              <div style={{ flex: 1 }}>
+              <div style={{ paddingLeft: '1rem', justifyContent: 'left' }}>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', lineHeight: 1.2 }}>{treeMeta.title}</h3>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   Position {currentIndex + 1} / {flashcards.length}
@@ -304,81 +304,81 @@ export default function Review() {
                 <div style={{ textAlign: 'center' }}>
                   <Brain className="text-accent" size={32} style={{ marginBottom: '1rem', opacity: 0.9 }} />
                   <p style={{ fontSize: '1.4rem', fontWeight: 600, margin: 0 }}>
-                    Your move for <span style={{ color:'var(--accent-color)', textTransform:'capitalize' }}>{treeMeta.color}</span>
+                    Your move for <span style={{ color: 'var(--accent-color)', textTransform: 'capitalize' }}>{treeMeta.color}</span>
                   </p>
                 </div>
               ) : (
                 <div className="animate-fade-in" style={{ width: '100%', textAlign: 'center' }}>
                   <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap: 6, color: status === 'correct' ? 'var(--success)' : 'var(--error)', justifyContent:'center', fontSize: '1.2rem', fontWeight: 700 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: status === 'correct' ? 'var(--success)' : 'var(--error)', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 700 }}>
                       {status === 'correct' ? <CheckCircle size={22} /> : <XCircle size={22} />}
                       {status === 'correct' ? 'Correct!' : 'Incorrect'}
                     </div>
                     {status === 'wrong' && <p className="text-muted text-sm">Correct move: <strong>{expectedMove}</strong></p>}
                   </div>
 
-                  <div style={{ 
-                    display:'flex', 
-                    gap:'1rem', 
-                    justifyContent:'center', 
-                    width:'100%', 
-                    flexWrap: 'wrap' 
+                  <div style={{
+                    display: 'flex',
+                    gap: '1rem',
+                    justifyContent: 'center',
+                    width: '100%',
+                    flexWrap: 'wrap'
                   }}>
                     {status === 'wrong' ? (
                       <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: '1 1 100%', padding: '1rem' }}>RETRY</button>
                     ) : (
                       <>
-                        <button 
-                          onClick={() => submitRating(1)} 
-                          className="btn" 
-                          style={{ 
-                            flex: '1 1 140px', 
-                            backgroundColor: 'rgba(219, 39, 119, 0.1)', 
-                            color: '#ec4899', 
-                            padding: '1rem', 
-                            fontSize: '0.85rem' 
+                        <button
+                          onClick={() => submitRating(1)}
+                          className="btn"
+                          style={{
+                            flex: '1 1 140px',
+                            backgroundColor: 'rgba(219, 39, 119, 0.1)',
+                            color: '#ec4899',
+                            padding: '1rem',
+                            fontSize: '0.85rem'
                           }}
                         >
-                          AGAIN<br/><span style={{ opacity: 0.6, fontSize: '0.75rem' }}>1m</span>
+                          AGAIN<br /><span style={{ opacity: 0.6, fontSize: '0.75rem' }}>1m</span>
                         </button>
-                        <button 
-                          onClick={() => submitRating(2)} 
-                          className="btn" 
-                          style={{ 
-                            flex: '1 1 140px', 
-                            backgroundColor: 'rgba(219, 39, 119, 0.25)', 
-                            color: '#fbcfe8', 
-                            padding: '1rem', 
-                            fontSize: '0.85rem' 
+                        <button
+                          onClick={() => submitRating(2)}
+                          className="btn"
+                          style={{
+                            flex: '1 1 140px',
+                            backgroundColor: 'rgba(219, 39, 119, 0.25)',
+                            color: '#fbcfe8',
+                            padding: '1rem',
+                            fontSize: '0.85rem'
                           }}
                         >
-                          HARD<br/><span style={{ opacity: 0.8, fontSize: '0.75rem' }}>10m</span>
+                          HARD<br /><span style={{ opacity: 0.8, fontSize: '0.75rem' }}>10m</span>
                         </button>
-                        <button 
-                          onClick={() => submitRating(3)} 
-                          className="btn" 
-                          style={{ 
-                            flex: '1 1 140px', 
-                            backgroundColor: 'rgba(219, 39, 119, 0.6)', 
-                            color: 'white', 
-                            padding: '1rem', 
-                            fontSize: '0.85rem' 
+                        <button
+                          onClick={() => submitRating(3)}
+                          className="btn"
+                          style={{
+                            flex: '1 1 140px',
+                            backgroundColor: 'rgba(219, 39, 119, 0.6)',
+                            color: 'white',
+                            padding: '1rem',
+                            fontSize: '0.85rem'
                           }}
                         >
-                          GOOD<br/><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>1d</span>
+                          GOOD<br /><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>1d</span>
                         </button>
-                        <button 
-                          onClick={() => submitRating(5)} 
-                          className="btn" 
-                          style={{ 
-                            flex: '1 1 140px', 
-                            backgroundColor: '#9d174d', 
-                            color: 'white', 
-                            padding: '1rem', 
-                            fontSize: '0.85rem' 
+                        <button
+                          onClick={() => submitRating(5)}
+                          className="btn"
+                          style={{
+                            flex: '1 1 140px',
+                            backgroundColor: '#9d174d',
+                            color: 'white',
+                            padding: '1rem',
+                            fontSize: '0.85rem'
                           }}
                         >
-                          EASY<br/><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>4d+</span>
+                          EASY<br /><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>4d+</span>
                         </button>
                       </>
                     )}
@@ -389,6 +389,6 @@ export default function Review() {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 }

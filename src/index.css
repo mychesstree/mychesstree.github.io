@@ -10,7 +10,7 @@
   --border-color-focus: #831843;
   --accent-color: #e11d48;
   --accent-hover: #be123c;
-  --success: #10b981;
+  --success: #ffffff;
   --error: #ef4444;
   --warning: #f59e0b;
   --radius-md: 0.5rem;
@@ -32,7 +32,12 @@ body {
   min-height: 100vh;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: 'Outfit', sans-serif;
   font-weight: 600;
   color: white;
@@ -60,7 +65,7 @@ button {
   gap: 0.5rem;
   background-color: var(--accent-color);
   color: white;
-  padding: 0.75rem 1.25rem;
+  padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   border: none;
   font-weight: 500;
@@ -86,6 +91,7 @@ button {
   background-color: rgba(255, 255, 255, 0.1);
   color: var(--text-main);
 }
+
 .btn-secondary:hover {
   background-color: rgba(255, 255, 255, 0.15);
   color: white;
@@ -95,6 +101,7 @@ button {
 .btn-danger {
   background-color: var(--error);
 }
+
 .btn-danger:hover {
   background-color: #dc2626;
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
@@ -102,7 +109,87 @@ button {
 
 .btn-icon {
   padding: 0.5rem;
+  aspect-ratio: 1 / 1;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-md);
+}
+
+/* Custom Button Varieties */
+.btn-save {
+  background-color: #f8fafc;
+  color: #0f172a;
+  animation: pulse-white 2s infinite ease-in-out;
+}
+
+.btn-save:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+@keyframes pulse-white {
+  0% {
+    box-shadow: 0 0 0 0 rgba(248, 250, 252, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 8px rgba(248, 250, 252, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(248, 250, 252, 0);
+  }
+}
+
+.btn-delete-mode-active {
+  background-color: #991b1b !important;
+  color: white !important;
+  border: 1px solid #ef4444 !important;
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* Tooltips */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #1e1b1c;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  border: 1px solid #3d2a2f;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-5px);
 }
 
 .card {
@@ -183,38 +270,118 @@ button {
 }
 
 /* Utility classes */
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.flex-1 { flex: 1; }
-.items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
-.justify-center { justify-content: center; }
-.min-h-screen { min-height: 100vh; }
-.w-full { width: 100%; }
-.gap-2 { gap: 0.5rem; }
-.gap-4 { gap: 1rem; }
-.gap-6 { gap: 1.5rem; }
-.gap-8 { gap: 2rem; }
-.mt-4 { margin-top: 1rem; }
-.mt-6 { margin-top: 1.5rem; }
-.mb-4 { margin-bottom: 1rem; }
-.mb-6 { margin-bottom: 1.5rem; }
-.mb-8 { margin-bottom: 2rem; }
-.text-center { text-align: center; }
-.text-muted { color: var(--text-muted); }
-.text-sm { font-size: 0.875rem; }
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.min-h-screen {
+  min-height: 100vh;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.gap-6 {
+  gap: 1.5rem;
+}
+
+.gap-8 {
+  gap: 2rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.mt-6 {
+  margin-top: 1.5rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
+
+.mb-8 {
+  margin-bottom: 2rem;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
 
 /* Grid systems */
-.grid { display: grid; }
-.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.grid-gap-4 { gap: 1rem; }
-.grid-gap-6 { gap: 1.5rem; }
+.grid {
+  display: grid;
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-gap-4 {
+  gap: 1rem;
+}
+
+.grid-gap-6 {
+  gap: 1.5rem;
+}
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -226,13 +393,16 @@ button {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--bg-color);
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-color-focus);
 }
@@ -265,6 +435,59 @@ button {
   background-color: var(--panel-bg);
   overflow: auto;
   min-height: 300px;
+}
+
+/* ── Responsive Board & Eval Bar ──────────────────────────── */
+.chess-board-container {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.eval-bar-wrapper {
+  width: 14px;
+  min-height: 100%;
+  position: relative;
+  cursor: help;
+}
+
+.eval-bar-bg {
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
+  overflow: hidden;
+  background-color: #111;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.eval-bar-fill {
+  width: 100%;
+  background-color: #f5f5f5;
+}
+
+@media (max-width: 768px) {
+  .chess-board-container {
+    flex-direction: column-reverse;
+    /* Bar below board */
+    gap: 0.5rem;
+  }
+
+  .eval-bar-wrapper {
+    width: 100%;
+    height: 10px;
+    min-height: 10px;
+  }
+
+  .eval-bar-bg {
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+
+  .eval-bar-fill {
+    height: 100% !important;
+  }
 }
 
 /* Mobile: board on top, tree below */
@@ -332,7 +555,9 @@ button {
   transition: all 0.2s;
 }
 
-.node circle:hover { fill: var(--accent-color); }
+.node circle:hover {
+  fill: var(--accent-color);
+}
 
 .node.active circle {
   fill: var(--accent-color);
@@ -383,9 +608,11 @@ button {
     overflow-y: auto;
     padding-bottom: 2rem;
   }
+
   .review-board-container {
     max-width: 500px;
   }
+
   .review-info-container {
     flex: 0 0 auto;
     width: 100%;
@@ -416,7 +643,7 @@ button {
   opacity: 0;
   visibility: hidden;
   transition: all 0.2s ease;
-  z-index: 1001;
+  z-index: 10000;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
 }
 
@@ -426,31 +653,55 @@ button {
   transform: translateX(-50%) translateY(-4px);
 }
 
-/* Heatmap Theme Overrides (Ultra Soft) */
-.react-calendar-heatmap .color-empty { fill: rgba(255, 255, 255, 0.02); }
+rect {
+  rx: 3px;
+  ry: 3px;
+}
+
+.react-calendar-heatmap rect.color-empty {
+  fill: rgba(107, 114, 128, 0.15);
+}
 
 /* Pinkscale (History) - Soft muted pink/maroon */
-.react-calendar-heatmap .color-pink-1 { fill: rgba(196, 126, 138, 0.15); }
-.react-calendar-heatmap .color-pink-2 { fill: rgba(196, 126, 138, 0.4); }
-.react-calendar-heatmap .color-pink-3 { fill: rgba(196, 126, 138, 0.7); }
-.react-calendar-heatmap .color-pink-4 { fill: rgba(196, 126, 138, 1); }
+.react-calendar-heatmap .color-pink-1 {
+  fill: rgba(196, 126, 138, 0.5);
+}
+
+.react-calendar-heatmap .color-pink-2 {
+  fill: rgba(196, 126, 138, 0.6);
+}
+
+.react-calendar-heatmap .color-pink-3 {
+  fill: rgba(196, 126, 138, 0.7);
+}
+
+.react-calendar-heatmap .color-pink-4 {
+  fill: rgba(196, 126, 138, 1);
+}
 
 /* Grayscale (Future) - Very subtle translucent grays */
-.react-calendar-heatmap .color-gray-1 { fill: rgba(107, 114, 128, 0.1); }
-.react-calendar-heatmap .color-gray-2 { fill: rgba(107, 114, 128, 0.25); }
-.react-calendar-heatmap .color-gray-3 { fill: rgba(107, 114, 128, 0.45); }
-.react-calendar-heatmap .color-gray-4 { fill: rgba(107, 114, 128, 0.65); }
+.react-calendar-heatmap .color-gray-1 {
+  fill: rgba(107, 114, 128, 0.3);
+}
+
+.react-calendar-heatmap .color-gray-2 {
+  fill: rgba(107, 114, 128, 0.4);
+}
+
+.react-calendar-heatmap .color-gray-3 {
+  fill: rgba(107, 114, 128, 0.5);
+}
+
+.react-calendar-heatmap .color-gray-4 {
+  fill: rgba(107, 114, 128, 0.6);
+}
 
 /* Today Indicator */
-.react-calendar-heatmap .color-today { 
+.react-calendar-heatmap .color-today {
   stroke: var(--accent-color);
   stroke-width: 1px;
 }
 
-.react-calendar-heatmap text {
-  font-size: 8px;
-  fill: var(--text-muted);
-}
 
 /* Repertoire Layout Utilities */
 .decks-scroll-container {
@@ -464,13 +715,17 @@ button {
     flex-wrap: nowrap;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
-    scrollbar-width: none; /* Hide for clean look */
+    scrollbar-width: none;
+    /* Hide for clean look */
   }
+
   .decks-scroll-container::-webkit-scrollbar {
     display: none;
   }
-  .decks-scroll-container > div {
-    flex: 0 0 320px; /* Fixed width for consistent alignment on desktop */
+
+  .decks-scroll-container>div {
+    flex: 0 0 320px;
+    /* Fixed width for consistent alignment on desktop */
     scroll-snap-align: start;
   }
 }
@@ -493,6 +748,7 @@ button {
   display: none;
 }
 
-.heatmap-scroll-wrapper > div {
-  min-width: 750px; /* Ensures the calendar doesn't squish on mobile */
+.heatmap-scroll-wrapper>div {
+  min-width: 750px;
+  /* Ensures the calendar doesn't squish on mobile */
 }
