@@ -292,7 +292,7 @@ export default function TreeEditor() {
     
     if (!error) {
       setIsPublic(newPublicStatus);
-      setTreeMeta(prev => prev ? { ...prev, is_public: newPublicStatus } : null);
+      setTreeMeta((prev: any) => prev ? { ...prev, is_public: newPublicStatus } : null);
       
       // Show URL modal when making tree public
       if (newPublicStatus) {

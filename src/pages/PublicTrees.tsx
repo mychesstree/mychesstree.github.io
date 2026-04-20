@@ -129,7 +129,7 @@ export default function PublicTrees() {
           {filteredTrees.map((tree) => (
             <Link
               key={tree.id}
-              to={`/tree/${tree.id}`}
+              to={`/editor/${tree.id}`}
               className="card"
               style={{
                 textDecoration: 'none',

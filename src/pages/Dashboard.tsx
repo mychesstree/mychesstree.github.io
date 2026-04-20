@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2 } from 'lucide-react';
+import StarButton from '../components/StarButton';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
 import CreateTreeModal from '../components/CreateTreeModal';
@@ -17,6 +18,13 @@ interface Tree {
   created_at: string;
   cards_due?: number;
   tree_data?: TreeNode;
+  star_count?: number;
+  is_starred?: boolean;
+  users?: {
+    username: string;
+  } | {
+    username: string;
+  }[];
 }
 
 export default function Dashboard() {
@@ -55,17 +63,26 @@ export default function Dashboard() {
     setLoading(true);
 
     if (isGuest) {
-      const guestTrees = loadGuestTrees();
-      const treesWithDue = guestTrees.map(tree => {
-        const reviews = loadGuestReviews(tree.id);
-        const dueCount = tree.tree_data
-          ? calculateDuePositions(tree.tree_data, reviews, tree.color)
-          : 0;
-        return { ...tree, cards_due: dueCount };
-      });
-      setTrees(treesWithDue);
-      setLoading(false);
-      return;
+      // For guest users, only show public trees in shared view
+      if (viewMode === 'shared') {
+        const topPublicTrees = await fetchTopPublicTrees();
+        setTrees(topPublicTrees);
+        setLoading(false);
+        return;
+      } else {
+        // Owned view for guests - show their local trees
+        const guestTrees = loadGuestTrees();
+        const treesWithDue = guestTrees.map(tree => {
+          const reviews = loadGuestReviews(tree.id);
+          const dueCount = tree.tree_data
+            ? calculateDuePositions(tree.tree_data, reviews, tree.color)
+            : 0;
+          return { ...tree, cards_due: dueCount };
+        });
+        setTrees(treesWithDue);
+        setLoading(false);
+        return;
+      }
     }
 
     if (!user) return;
@@ -95,10 +112,22 @@ export default function Dashboard() {
           .select('fen, next_review_date')
           .eq('tree_id', tree.id);
 
+        // Check if user has starred this tree
+        const { data: starData } = await supabase
+          .from('tree_stars')
+          .select('id')
+          .eq('tree_id', tree.id)
+          .eq('user_id', user.id)
+          .single();
+
         const dueCount = tree.tree_data
           ? calculateDuePositions(tree.tree_data, reviews || [], tree.color)
           : 0;
-        return { ...tree, cards_due: dueCount };
+        return { 
+          ...tree, 
+          cards_due: dueCount,
+          is_starred: !!starData
+        };
       }));
       setTrees(treesWithDue);
     }
@@ -106,30 +135,39 @@ export default function Dashboard() {
   };
 
   const searchPublicTrees = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
+    if (!query.trim()) return setSearchResults([]);
+    
     setIsSearching(true);
     try {
       const { data, error } = await supabase
         .from('trees')
-        .select(`
-          id,
-          title,
-          color,
-          created_at,
-          updated_at,
-          users!trees_user_id_fkey(username)
-        `)
+        .select('id, title, color, created_at, updated_at, star_count, users!trees_user_id_fkey(username)')
         .eq('is_public', true)
         .or(`title.ilike.%${query}%,owner_username.ilike.%${query}%`)
         .order('updated_at', { ascending: false })
         .limit(20);
 
       if (error) throw error;
-      setSearchResults(data || []);
+      
+      // Check star status for authenticated users
+      if (user && data) {
+        const resultsWithStarStatus = await Promise.all(data.map(async (tree) => {
+          const { data: starData } = await supabase
+            .from('tree_stars')
+            .select('id')
+            .eq('tree_id', tree.id)
+            .eq('user_id', user.id)
+            .single();
+          
+          return {
+            ...tree,
+            is_starred: !!starData
+          };
+        }));
+        setSearchResults(resultsWithStarStatus);
+      } else {
+        setSearchResults(data || []);
+      }
     } catch (error) {
       console.error('Search error:', error);
       setSearchResults([]);
@@ -148,6 +186,7 @@ export default function Dashboard() {
           color,
           created_at,
           updated_at,
+          star_count,
           users!trees_user_id_fkey(username)
         `)
         .eq('is_public', true)
@@ -155,6 +194,25 @@ export default function Dashboard() {
         .limit(5);
 
       if (error) throw error;
+      
+      // Check star status for authenticated users
+      if (user && data) {
+        const treesWithStarStatus = await Promise.all(data.map(async (tree) => {
+          const { data: starData } = await supabase
+            .from('tree_stars')
+            .select('id')
+            .eq('tree_id', tree.id)
+            .eq('user_id', user.id)
+            .single();
+          
+          return {
+            ...tree,
+            is_starred: !!starData
+          };
+        }));
+        return treesWithStarStatus;
+      }
+      
       return data || [];
     } catch (error) {
       console.error('Error fetching top public trees:', error);
@@ -240,7 +298,18 @@ export default function Dashboard() {
   const handleExport = async () => {
     try {
       // Fetch all trees with their review data
-      const exportData = {
+      const exportData: {
+        version: string;
+        exportDate: string;
+        trees: {
+          id: string;
+          title: string;
+          color: 'white' | 'black';
+          created_at: string;
+          tree_data: TreeNode | undefined;
+          reviews: any[];
+        }[];
+      } = {
         version: '1.0',
         exportDate: new Date().toISOString(),
         trees: []
@@ -253,7 +322,7 @@ export default function Dashboard() {
           color: tree.color,
           created_at: tree.created_at,
           tree_data: tree.tree_data,
-          reviews: []
+          reviews: [] as any[]
         };
 
         // Fetch reviews for this tree
@@ -653,79 +722,113 @@ export default function Dashboard() {
                 <div>
                   <div className="flex items-center justify-between mb-4" style={{ position: 'relative' }}>
                     <h3 style={{ margin: 0, borderBottom: tree.color === 'white' ? '3px solid #fff' : '3px solid #777', display: 'inline-block', lineHeight: '1.4' }}>{tree.title}</h3>
-                    <div style={{ position: 'relative' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveDropdown(activeDropdown === tree.id ? null : tree.id);
+                    {/* Show star button in shared view, dropdown in owned view */}
+                    {(viewMode === 'shared' || searchQuery.trim()) ? (
+                      <StarButton 
+                        treeId={tree.id}
+                        starCount={tree.star_count || 0}
+                        isStarred={tree.is_starred || false}
+                        onStarChange={(newStarCount, isStarred) => {
+                          // Update the tree in the local state
+                          if (searchQuery.trim()) {
+                            setSearchResults(prev => prev.map(t => 
+                              t.id === tree.id 
+                                ? { ...t, star_count: newStarCount, is_starred: isStarred }
+                                : t
+                            ));
+                          } else {
+                            setTrees(prev => prev.map(t => 
+                              t.id === tree.id 
+                                ? { ...t, star_count: newStarCount, is_starred: isStarred }
+                                : t
+                            ));
+                          }
                         }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: '4px',
-                          cursor: 'pointer',
-                          color: 'var(--text-muted)',
-                          borderRadius: '4px'
-                        }}
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
-
-                      {activeDropdown === tree.id && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
+                        size="md"
+                      />
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDropdown(activeDropdown === tree.id ? null : tree.id);
+                          }}
                           style={{
-                            position: 'absolute',
-                            top: '100%',
-                            right: 0,
-                            marginTop: '4px',
-                            backgroundColor: 'var(--panel-bg)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: 'var(--radius-md)',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                            zIndex: 1000,
-                            minWidth: '200px'
-                          }}>
-                          <div style={{ padding: '8px 0' }}>
-                            <div style={{
-                              padding: '8px 16px',
-                              fontSize: '0.8rem',
-                              color: 'var(--text-muted)',
-                              borderBottom: '1px solid var(--border-color)',
-                              marginBottom: '4px'
+                            background: 'none',
+                            border: 'none',
+                            padding: '4px',
+                            cursor: 'pointer',
+                            color: 'var(--text-muted)',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
+
+                        {activeDropdown === tree.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              right: 0,
+                              marginTop: '4px',
+                              backgroundColor: 'var(--panel-bg)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-md)',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                              zIndex: 1000,
+                              minWidth: '200px'
                             }}>
-                              Created: {new Date(tree.created_at).toLocaleDateString()}
-                            </div>
-                            <button
-                              onClick={() => {
-                                setDeleteConfirm(tree.id);
-                                setActiveDropdown(null);
-                              }}
-                              style={{
-                                width: '100%',
+                            <div style={{ padding: '8px 0' }}>
+                              <div style={{
                                 padding: '8px 16px',
-                                background: 'none',
-                                border: 'none',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                color: '#ef4444',
-                                fontSize: '0.9rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px'
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
-                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                            >
-                              <Trash2 size={14} />
-                              Delete Tree
-                            </button>
+                                fontSize: '0.8rem',
+                                color: 'var(--text-muted)',
+                                borderBottom: '1px solid var(--border-color)',
+                                marginBottom: '4px'
+                              }}>
+                                Created: {new Date(tree.created_at).toLocaleDateString()}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setDeleteConfirm(tree.id);
+                                  setActiveDropdown(null);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 16px',
+                                  background: 'none',
+                                  border: 'none',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  color: '#ef4444',
+                                  fontSize: '0.9rem',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Trash2 size={14} />
+                                Delete Tree
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
+                {/* Username section */}
+                {tree.users && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                      by {Array.isArray(tree.users) ? tree.users[0]?.username : tree.users.username}
+                    </span>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Link to={`/editor/${tree.id}`} className="btn" style={{ flex: 1 }}>
                     <GitMerge size={16} />

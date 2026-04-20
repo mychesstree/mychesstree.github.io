@@ -25,3 +25,6 @@ Modelfile
 *.sw?
 
 .env
+supabase/
+schema.sql
+*.sql
