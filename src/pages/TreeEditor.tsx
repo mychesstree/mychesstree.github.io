@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import ForceTree from '../components/ForceTree';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
-import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu } from 'lucide-react';
+import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu, Eye, Pencil } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import type { TreeNode } from '../types/tree';
@@ -70,34 +70,78 @@ export default function TreeEditor() {
           gameRef.current = new Chess(nextNode.fen);
           setCurrentFen(nextNode.fen);
         } else if (importedBranch && importedBranch.children.length > 0) {
-          // Check if we're at the diverge point (importedBranch.fen)
+          // Check if we're in an imported branch and find next node
+          const findInImportedBranch = (node: TreeNode, targetFen: string): TreeNode | null => {
+            if (node.fen === targetFen) return node;
+            for (const child of node.children) {
+              const found = findInImportedBranch(child, targetFen);
+              if (found) return found;
+            }
+            return null;
+          };
+
+          // Check if we're at the diverge point
           if (currentFen === importedBranch.fen && importedBranch.children.length > 0) {
             const branchNode = importedBranch.children[0];
             gameRef.current = new Chess(branchNode.fen);
             setCurrentFen(branchNode.fen);
+          } else {
+            // Find current node in imported branch and go to its child
+            const importedCurrentNode = findInImportedBranch(importedBranch, currentFen);
+            if (importedCurrentNode && importedCurrentNode.children.length > 0) {
+              const nextNode = importedCurrentNode.children[0];
+              gameRef.current = new Chess(nextNode.fen);
+              setCurrentFen(nextNode.fen);
+            }
           }
         }
       } else if (e.key === 'ArrowLeft') {
-        // Go to parent - check if we're in an imported branch
+        // Go to parent - check if we're in an imported branch first
         if (importedBranch && importedBranch.children.length > 0) {
-          const isInImportedBranch = (fen: string): boolean => {
-            const checkNode = (node: TreeNode): boolean => {
-              if (node.fen === fen) return true;
-              for (const child of node.children) {
-                if (checkNode(child)) return true;
-              }
-              return false;
-            };
-            for (const child of importedBranch.children) {
-              if (checkNode(child)) return true;
+          const findInImportedBranch = (node: TreeNode, targetFen: string): TreeNode | null => {
+            if (node.fen === targetFen) return node;
+            for (const child of node.children) {
+              const found = findInImportedBranch(child, targetFen);
+              if (found) return found;
             }
-            return false;
+            return null;
+          };
+
+          const findParentInImportedBranch = (node: TreeNode, targetFen: string, parent: TreeNode | null): TreeNode | null => {
+            if (node.fen === targetFen) return parent;
+            for (const child of node.children) {
+              const found = findParentInImportedBranch(child, targetFen, node);
+              if (found) return found;
+            }
+            return null;
           };
           
-          if (isInImportedBranch(currentFen)) {
-            // Go back to the diverge point
-            gameRef.current = new Chess(importedBranch.fen);
-            setCurrentFen(importedBranch.fen);
+          // Check if we're in the imported branch
+          const importedCurrentNode = findInImportedBranch(importedBranch, currentFen);
+          if (importedCurrentNode) {
+            // If we're at the diverge point, go back to main tree parent
+            if (currentFen === importedBranch.fen) {
+              const findParent = (node: TreeNode, targetFen: string, parent: TreeNode | null): TreeNode | null => {
+                if (node.fen === targetFen) return parent;
+                for (const child of node.children) {
+                  const found = findParent(child, targetFen, node);
+                  if (found) return found;
+                }
+                return null;
+              };
+              const parentNode = findParent(treeData, currentFen, null);
+              if (parentNode) {
+                gameRef.current = new Chess(parentNode.fen);
+                setCurrentFen(parentNode.fen);
+              }
+            } else {
+              // Go to parent in imported branch
+              const importedParent = findParentInImportedBranch(importedBranch, currentFen, null);
+              if (importedParent) {
+                gameRef.current = new Chess(importedParent.fen);
+                setCurrentFen(importedParent.fen);
+              }
+            }
             return;
           }
         }
@@ -163,7 +207,7 @@ export default function TreeEditor() {
     setLoadingShares(true);
     const { data } = await supabase
       .from('tree_shares')
-      .select('*, users!tree_shares_user_id_fkey(username)')
+      .select('*, users!inner(username)')
       .eq('tree_id', id);
     setExistingShares(data || []);
     setLoadingShares(false);
@@ -450,27 +494,36 @@ export default function TreeEditor() {
               Share Tree
             </h2>
 
-            <div className="input-group">
-              <label>Recipient Username</label>
-              <input
-                type="text"
-                className="input"
-                placeholder="Enter exact username"
-                value={shareUsername}
-                onChange={(e) => setShareUsername(e.target.value.toLowerCase())}
-              />
-            </div>
-
-            <div className="input-group">
-              <label>Access Level</label>
-              <select
-                className="input"
-                value={shareAccess}
-                onChange={(e) => setShareAccess(e.target.value as 'read' | 'edit')}
-              >
-                <option value="read">Can View (Read Only)</option>
-                <option value="edit">Can Edit & Save</option>
-              </select>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Recipient Username</label>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Enter exact username"
+                    value={shareUsername}
+                    onChange={(e) => setShareUsername(e.target.value.toLowerCase())}
+                    style={{ flex: 1 }}
+                  />
+                  <TooltipButton
+                    tooltip={`Current: ${shareAccess === 'read' ? 'Read Only' : 'Edit Access'} - Click to toggle`}
+                    onClick={() => setShareAccess(shareAccess === 'read' ? 'edit' : 'read')}
+                    className="btn btn-secondary"
+                    style={{ 
+                      padding: '0.5rem', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      minWidth: '44px',
+                      height: '40px',
+                      flexShrink: 0
+                    }}
+                  >
+                    {shareAccess === 'read' ? <Eye size={18} /> : <Pencil size={18} />}
+                  </TooltipButton>
+                </div>
+              </div>
             </div>
 
             {shareStatus.msg && (
@@ -512,7 +565,7 @@ export default function TreeEditor() {
                 }
               }}
               className="btn"
-              style={{ width: '100%' }}
+              style={{ width: '100%', marginTop: '1rem' }}
             >
               Grant Access
             </button>
@@ -525,9 +578,23 @@ export default function TreeEditor() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     {existingShares.length === 0 ? <div className="text-muted text-sm">No shares yet.</div> : existingShares.map(s => (
                       <div key={s.user_id} className="flex items-center justify-between" style={{ padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}>
-                        <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <div 
+                            style={{ 
+                              padding: '0.25rem', 
+                              marginLeft: '0.5rem',
+                              borderRadius: '4px', 
+                              backgroundColor: 'rgba(255,255,255,0.1)', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              width: '24px',
+                              height: '24px'
+                            }}
+                          >
+                            {s.access_level === 'read' ? <Eye size={14} /> : <Pencil size={14} />}
+                          </div>
                           <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{s.users?.username || 'Unknown'}</div>
-                          <div className="text-muted text-xs uppercase">{s.access_level}</div>
                         </div>
                         <button
                           onClick={async () => {

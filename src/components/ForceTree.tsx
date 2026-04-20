@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
-import { GitBranchPlus, GitBranch } from 'lucide-react';
+import { GitBranchPlus, GitBranch, ChevronLeft, ChevronRight } from 'lucide-react';
 import TooltipButton from './TooltipButton';
 
 export interface TreeNode {
@@ -44,6 +44,75 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
   const svgRef = useRef<SVGSVGElement>(null);
   const [focusMode, setFocusMode] = useState(false);
   const activePath = useMemo(() => pathToNode(data, currentFen), [data, currentFen]);
+
+  // Navigation functions
+  const navigateLeft = useCallback(() => {
+    // Find parent of current node
+    const findParent = (node: TreeNode, targetFen: string, parent: TreeNode | null): TreeNode | null => {
+      if (node.fen === targetFen) return parent;
+      for (const child of node.children) {
+        const found = findParent(child, targetFen, node);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    // Check if we're in an imported branch first
+    if (importedBranch && importedBranch.children.length > 0) {
+      const isInImportedBranch = (fen: string): boolean => {
+        const checkNode = (node: TreeNode): boolean => {
+          if (node.fen === fen) return true;
+          for (const child of node.children) {
+            if (checkNode(child)) return true;
+          }
+          return false;
+        };
+        for (const child of importedBranch.children) {
+          if (checkNode(child)) return true;
+        }
+        return false;
+      };
+      
+      if (isInImportedBranch(currentFen)) {
+        // Go back to the diverge point
+        onNodeClick({ fen: importedBranch.fen, move: 'Start' });
+        return;
+      }
+    }
+
+    // Otherwise find parent in main tree
+    const parentNode = findParent(data, currentFen, null);
+    if (parentNode) {
+      onNodeClick({ fen: parentNode.fen, move: parentNode.move || 'Start' });
+    }
+  }, [currentFen, data, importedBranch, onNodeClick]);
+
+  const navigateRight = useCallback(() => {
+    // Find current node in tree
+    const findNode = (node: TreeNode, fen: string): TreeNode | null => {
+      if (node.fen === fen) return node;
+      for (const child of node.children) {
+        const found = findNode(child, fen);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const currentNode = findNode(data, currentFen);
+    if (!currentNode) return;
+
+    // Go to first child - check main tree first, then imported branch
+    if (currentNode.children.length > 0) {
+      const nextNode = currentNode.children[0];
+      onNodeClick({ fen: nextNode.fen, move: nextNode.move || 'Start' });
+    } else if (importedBranch && importedBranch.children.length > 0) {
+      // Check if we're at the diverge point (importedBranch.fen)
+      if (currentFen === importedBranch.fen && importedBranch.children.length > 0) {
+        const branchNode = importedBranch.children[0];
+        onNodeClick({ fen: branchNode.fen, move: branchNode.move || 'Start' });
+      }
+    }
+  }, [currentFen, data, importedBranch, onNodeClick]);
 
   const importedFens = useMemo(() => {
     if (!importedBranch) return new Set<string>();
@@ -243,6 +312,44 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: '0.5rem', zIndex: 20 }}>
+        <TooltipButton
+          tooltip="Navigate Back (Left)"
+          onClick={navigateLeft}
+          className="btn btn-secondary"
+          style={{
+            padding: 0,
+            width: 36,
+            height: 36,
+            background: 'rgba(0,0,0,0.5)',
+            color: '#fff',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <ChevronLeft size={20} />
+        </TooltipButton>
+        <TooltipButton
+          tooltip="Navigate Forward (Right)"
+          onClick={navigateRight}
+          className="btn btn-secondary"
+          style={{
+            padding: 0,
+            width: 36,
+            height: 36,
+            background: 'rgba(0,0,0,0.5)',
+            color: '#fff',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <ChevronRight size={20} />
+        </TooltipButton>
         <TooltipButton
           tooltip={focusMode ? "Show All Branches" : "Focus Current Branch"}
           onClick={() => setFocusMode(f => !f)}
