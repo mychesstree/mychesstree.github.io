@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown, HelpCircle } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown, HelpCircle, Globe } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useDropdown } from '../hooks/useDropdown';
 import TutorialModal from './TutorialModal';
@@ -85,7 +85,28 @@ export default function Layout() {
                 {user?.email}
               </div>
 
-              {/* Dashboard link */}
+              {/* Public Trees link */}
+              <Link
+                to="/public-trees"
+                onClick={closeDropdown}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  padding: '0.65rem 1rem',
+                  color: 'var(--text-main)',
+                  textDecoration: 'none',
+                  fontSize: '0.9rem',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--panel-bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                <Globe size={16} />
+                Public Trees
+              </Link>
+
+              {/* Settings link */}
               <Link
                 to="/settings"
                 onClick={closeDropdown}

@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import ForceTree from '../components/ForceTree';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
-import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu, Eye, Pencil } from 'lucide-react';
+import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu, Eye, Pencil, Globe, GlobeLock, Copy } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import type { TreeNode } from '../types/tree';
@@ -39,6 +39,9 @@ export default function TreeEditor() {
   const [importPgnText, setImportPgnText] = useState('');
   const [importedBranch, setImportedBranch] = useState<TreeNode | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [showPublicUrlModal, setShowPublicUrlModal] = useState(false);
+  const [publicUrlCopied, setPublicUrlCopied] = useState(false);
   const isMobile = useMobile();
 
   // Chess Ref
@@ -267,6 +270,48 @@ export default function TreeEditor() {
       })();
     }
   }, [id, user, isGuest, getGuestTree]);
+
+  // Load public status from tree metadata
+  useEffect(() => {
+    if (treeMeta) {
+      setIsPublic(treeMeta.is_public || false);
+    }
+  }, [treeMeta]);
+
+  const togglePublic = async () => {
+    if (!id || !user || isGuest) return;
+    
+    const newPublicStatus = !isPublic;
+    const { error } = await supabase
+      .from('trees')
+      .update({ 
+        is_public: newPublicStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+    
+    if (!error) {
+      setIsPublic(newPublicStatus);
+      setTreeMeta(prev => prev ? { ...prev, is_public: newPublicStatus } : null);
+      
+      // Show URL modal when making tree public
+      if (newPublicStatus) {
+        setShowPublicUrlModal(true);
+        setPublicUrlCopied(false);
+      }
+    }
+  };
+
+  const copyPublicUrl = async () => {
+    const publicUrl = `${window.location.origin}/#/editor/${id}`;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setPublicUrlCopied(true);
+      setTimeout(() => setPublicUrlCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy URL:', err);
+    }
+  };
 
   useEffect(() => {
     const eng = engineRef.current;
@@ -570,6 +615,58 @@ export default function TreeEditor() {
               Grant Access
             </button>
 
+            {/* Public Toggle */}
+            {!isGuest && (
+              <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Make Tree Public</span>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {isPublic && (
+                      <button
+                        onClick={copyPublicUrl}
+                        className="btn btn-secondary"
+                        style={{ 
+                          padding: '0.6rem 0.6rem',
+                          fontSize: '0.8rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem'
+                        }}
+                      >
+                        {publicUrlCopied ? (
+                          'Copied!'
+                        ) : (
+                          <>
+                            <Copy size={14} />
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <button
+                      onClick={togglePublic}
+                      className={`btn ${isPublic ? 'btn-public' : 'btn-secondary'}`}
+                      style={{ 
+                        padding: '0.4rem 0.8rem',
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        color: isPublic ? '#ffffff' : undefined
+                      }}
+                    >
+                      {isPublic ? <Globe size={16} /> : <GlobeLock size={16} />}
+                      {isPublic ? 'Public' : 'Private'}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-muted text-sm" style={{ margin: 0 }}>
+                  {isPublic 
+                    ? 'Anyone can view this tree with the link. Toggle to make it private.' 
+                    : 'Make this tree accessible to anyone with the link.'}
+                </p>
+              </div>
+            )}
+
             {/* Existing Shares List */}
             {user?.id === treeMeta.user_id && (
               <div style={{ marginTop: '2rem' }}>
@@ -612,6 +709,83 @@ export default function TreeEditor() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Public URL Modal */}
+      {showPublicUrlModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '1rem'
+        }}>
+          <div className="card animate-fade-in" style={{ maxWidth: 450, width: '100%', position: 'relative' }}>
+            <button onClick={() => setShowPublicUrlModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+              <X size={24} />
+            </button>
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Globe size={24} color="#ffffff" />
+              Tree is Now Public!
+            </h2>
+            <p className="text-muted text-sm" style={{ marginBottom: '1.5rem' }}>
+              Your tree "{treeMeta?.title}" is now publicly accessible. Share this URL with anyone to let them view your repertoire:
+            </p>
+
+            <div style={{ 
+              display: 'flex', 
+              gap: '0.5rem', 
+              marginBottom: '1.5rem',
+              padding: '0.75rem',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <input
+                type="text"
+                readOnly
+                value={`${window.location.origin}/#/editor/${id}`}
+                style={{ 
+                  flex: 1,
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-main)',
+                  fontSize: '0.9rem',
+                  fontFamily: 'monospace'
+                }}
+              />
+              <button
+                onClick={copyPublicUrl}
+                className="btn btn-secondary"
+                style={{ 
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                {publicUrlCopied ? (
+                  <>
+                    <span style={{ color: '#ffffff' }}>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    Copy Link
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button
+                onClick={() => setShowPublicUrlModal(false)}
+                className="btn"
+                style={{ flex: 1 }}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

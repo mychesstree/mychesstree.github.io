@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import TreeEditor from './pages/TreeEditor';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
+import PublicTrees from './pages/PublicTrees';
 import UpdatePassword from './pages/UpdatePassword';
 import TreeNotFound from './pages/TreeNotFound';
 
@@ -27,6 +28,9 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<UpdatePassword />} />
+            <Route path="/public-trees" element={<Layout />}>
+              <Route index element={<PublicTrees />} />
+            </Route>
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Dashboard />} />
               <Route path="editor/:id" element={<TreeEditor />} />
