@@ -305,6 +305,48 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
     return () => { simulation.stop(); };
   }, [data, currentFen, focusMode, activePath, onNodeClick, isDeleteMode, importedBranch]);
 
+  // Auto-center on current node when currentFen changes
+  useEffect(() => {
+    if (!svgRef.current || !containerRef.current) return;
+
+    const el = svgRef.current;
+    const containerWidth = containerRef.current.clientWidth || 600;
+    const height = containerRef.current.clientHeight || 500;
+
+    // Find the current node in the tree
+    const findNode = (node: TreeNode, fen: string): TreeNode | null => {
+      if (node.fen === fen) return node;
+      for (const child of node.children) {
+        const found = findNode(child, fen);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const currentNode = findNode(data, currentFen);
+    if (!currentNode) return;
+
+    // Wait for the simulation to stabilize, then center
+    const timeoutId = setTimeout(() => {
+      const zoom = d3.zoom<SVGSVGElement, unknown>();
+      const scale = d3.zoomTransform(el).k || 1;
+      
+      // Find the D3 node element with matching fen
+      const nodeElements = d3.select(el).selectAll('g').filter((d: any) => d && d.fen === currentFen);
+      if (nodeElements.size() > 0) {
+        const nodeData = nodeElements.datum() as any;
+        if (nodeData && nodeData.x !== undefined && nodeData.y !== undefined) {
+          const x = -nodeData.x * scale + containerWidth / 2;
+          const y = -nodeData.y * scale + height / 2;
+          d3.select(el).transition().duration(600).ease(d3.easeCubicOut)
+            .call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+        }
+      }
+    }, 100); // Small delay to ensure simulation has positioned nodes
+
+    return () => clearTimeout(timeoutId);
+  }, [currentFen, data]);
+
   useEffect(() => {
     return draw();
   }, [draw]);
