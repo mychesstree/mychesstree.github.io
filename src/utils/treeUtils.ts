@@ -49,6 +49,42 @@ export function uciToArrow(uci: string) {
   return { startSquare: uci.slice(0, 2), endSquare: uci.slice(2, 4), color: 'rgba(225,29,72,0.85)' };
 }
 
+export function uciToWhiteArrow(uci: string) {
+  if (!uci || uci.length < 4) return null;
+  return { startSquare: uci.slice(0, 2), endSquare: uci.slice(2, 4), color: 'rgba(255,255,255,0.85)' };
+}
+
+export function getChildMoveArrows(tree: TreeNode, currentFen: string) {
+  const currentNode = findNode(tree, currentFen);
+  if (!currentNode || !currentNode.children.length) return [];
+  
+  const chess = new Chess(currentFen);
+  const arrows: Array<{ startSquare: string; endSquare: string; color: string }> = [];
+  
+  for (const child of currentNode.children) {
+    // Get all possible moves from current position
+    const moves = chess.moves({ verbose: true });
+    
+    for (const move of moves) {
+      // Make the move and check if it leads to the child position
+      const testChess = new Chess(currentFen);
+      try {
+        const result = testChess.move(move);
+        if (result && testChess.fen() === child.fen) {
+          // Found the move, create white arrow
+          const arrow = uciToWhiteArrow(move.from + move.to);
+          if (arrow) arrows.push(arrow);
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  
+  return arrows;
+}
+
 export function parsePgnMoves(pgn: string): { moves: string[]; finalFen: string } {
   // Extract just the move text
   const moveText = pgn

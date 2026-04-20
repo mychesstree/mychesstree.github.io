@@ -15,9 +15,8 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 
 
 Todo:
-
-
-in force graph lets make it so that the branches want to slight fray away from eachother especially when they are close to each other in later parts of the tree
+import study from lichess
+add arrows left right on top right of the force tree for mobile users to navigate and allow arrows on temp nodes
 
 Notes:
 - Under Shared with me remove create tree button and just say no trees shared with you

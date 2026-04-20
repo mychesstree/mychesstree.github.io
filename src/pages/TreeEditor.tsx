@@ -11,7 +11,7 @@ import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu } from 'lucide-
 import TooltipButton from '../components/TooltipButton';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import type { TreeNode } from '../types/tree';
-import { uciToArrow, stripPending, findNode, countNodes, hasDuplicateFen, deleteNodeFromTree, parsePgnMoves } from '../utils/treeUtils';
+import { uciToArrow, stripPending, findNode, countNodes, hasDuplicateFen, deleteNodeFromTree, parsePgnMoves, getChildMoveArrows } from '../utils/treeUtils';
 
 // Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
@@ -417,7 +417,12 @@ export default function TreeEditor() {
   const isWhiteTurn = gameRef.current.turn() === 'w';
   const perspScore = isWhiteTurn ? evalNum : -evalNum;
   const whitePercent = 50 + 50 * (2 / Math.PI) * Math.atan(perspScore / 4);
-  const arrows = uciToArrow(bestMove) ? [uciToArrow(bestMove)!] : [];
+  
+  // Combine pink engine arrows with white child move arrows
+  const engineArrows = uciToArrow(bestMove) ? [uciToArrow(bestMove)!] : [];
+  const childArrows = treeData ? getChildMoveArrows(treeData, currentFen) : [];
+  const arrows = [...engineArrows, ...childArrows];
+  
   const boardOrientation: 'white' | 'black' = treeMeta?.color === 'black' ? 'black' : 'white';
 
   if (loading) return (
