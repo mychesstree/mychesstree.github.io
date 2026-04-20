@@ -55,7 +55,7 @@ function calculateSM2(rating: number, oldInterval: number, oldRepetitions: numbe
 export default function Review() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isGuest, getGuestTree, loadGuestReviews, saveGuestReview } = useAuth();
+  const {isGuest, getGuestTree, loadGuestReviews, saveGuestReview } = useAuth();
   const [treeMeta, setTreeMeta] = useState<any>(null);
 
   const gameRef = useRef(new Chess());

@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, GitMerge, LayoutGrid, Users, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2 } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
+import CreateTreeModal from '../components/CreateTreeModal';
 import type { TreeNode } from '../types/tree';
 import { calculateDuePositions } from '../utils/treeUtils';
 
@@ -54,7 +55,7 @@ export default function Dashboard() {
       const guestTrees = loadGuestTrees();
       const treesWithDue = guestTrees.map(tree => {
         const reviews = loadGuestReviews(tree.id);
-        const dueCount = tree.tree_data 
+        const dueCount = tree.tree_data
           ? calculateDuePositions(tree.tree_data, reviews, tree.color)
           : 0;
         return { ...tree, cards_due: dueCount };
@@ -98,7 +99,7 @@ export default function Dashboard() {
           .select('fen, next_review_date')
           .eq('tree_id', tree.id);
 
-        const dueCount = tree.tree_data 
+        const dueCount = tree.tree_data
           ? calculateDuePositions(tree.tree_data, reviews || [], tree.color)
           : 0;
         return { ...tree, cards_due: dueCount };
@@ -310,6 +311,15 @@ export default function Dashboard() {
 
   return (
     <>
+      <CreateTreeModal
+        isOpen={isCreating}
+        onClose={() => setIsCreating(false)}
+        onSubmit={handleCreate}
+        newTitle={newTitle}
+        setNewTitle={setNewTitle}
+        newColor={newColor}
+        setNewColor={setNewColor}
+      />
       {/* Import/Export Modal */}
       {showImportExportModal && (
         <div style={{
@@ -405,14 +415,14 @@ export default function Dashboard() {
               Are you sure you want to delete this tree? This action cannot be undone and all associated review data will be lost.
             </p>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-              <button 
-                onClick={() => setDeleteConfirm(null)} 
+              <button
+                onClick={() => setDeleteConfirm(null)}
                 className="btn btn-secondary"
               >
                 Cancel
               </button>
-              <button 
-                onClick={() => handleDeleteTree(deleteConfirm)} 
+              <button
+                onClick={() => handleDeleteTree(deleteConfirm)}
                 className="btn"
                 style={{ backgroundColor: '#ef4444' }}
               >
@@ -429,8 +439,8 @@ export default function Dashboard() {
             <div className="flex items-center justify-between" style={{ gap: '0.5rem' }}>
               <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 0 }}>
                 <AlertCircle size={16} style={{ color: '#ffffff', flexShrink: 0 }} />
-                <p className="text-muted" style={{ 
-                  margin: 0, 
+                <p className="text-muted" style={{
+                  margin: 0,
                   fontSize: '0.8rem',
                   lineHeight: isMobile ? '1.2' : 'normal',
                   display: isMobile ? 'block' : 'inline'
@@ -492,16 +502,16 @@ export default function Dashboard() {
             </h2>
           </div>
           <div className="flex gap-2">
-            <button 
-              onClick={() => setShowImportExportModal(true)} 
+            <button
+              onClick={() => setShowImportExportModal(true)}
               className="btn btn-secondary"
               title={isMobile ? "Import/Export" : undefined}
             >
               <Download size={18} />
               {!isMobile && " Import/Export"}
             </button>
-            <button 
-              onClick={() => setIsCreating(true)} 
+            <button
+              onClick={() => setIsCreating(true)}
               className="btn"
               title={isMobile ? "New Tree" : undefined}
             >
@@ -511,37 +521,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {isCreating && (
-          <div className="card mb-6 animate-fade-in" style={{ border: '1px solid var(--accent-color)' }}>
-            <h3 className="mb-4 text-white">Create New Tree</h3>
-            <form onSubmit={handleCreate} className="flex items-center gap-4 flex-wrap">
-              <div className="input-group" style={{ margin: 0, flex: 1, minWidth: '200px' }}>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="E.g., Caro-Kann Defense"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="input-group" style={{ margin: 0 }}>
-                <select
-                  className="input"
-                  value={newColor}
-                  onChange={(e) => setNewColor(e.target.value as 'white' | 'black')}
-                >
-                  <option value="white">Playing as White</option>
-                  <option value="black">Playing as Black</option>
-                </select>
-              </div>
-              <div className="flex gap-2">
-                <button type="submit" className="btn">Create</button>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsCreating(false)}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        )}
+
 
         {trees.length === 0 && !isCreating ? (
           <div className="card text-center" style={{ padding: '4rem 2rem' }}>
@@ -577,9 +557,9 @@ export default function Dashboard() {
                       >
                         <MoreHorizontal size={16} />
                       </button>
-                      
+
                       {activeDropdown === tree.id && (
-                        <div 
+                        <div
                           onClick={(e) => e.stopPropagation()}
                           style={{
                             position: 'absolute',
@@ -594,9 +574,9 @@ export default function Dashboard() {
                             minWidth: '200px'
                           }}>
                           <div style={{ padding: '8px 0' }}>
-                            <div style={{ 
-                              padding: '8px 16px', 
-                              fontSize: '0.8rem', 
+                            <div style={{
+                              padding: '8px 16px',
+                              fontSize: '0.8rem',
                               color: 'var(--text-muted)',
                               borderBottom: '1px solid var(--border-color)',
                               marginBottom: '4px'
