@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid, Users, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2 } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
 import CreateTreeModal from '../components/CreateTreeModal';
@@ -34,6 +34,9 @@ export default function Dashboard() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showGuestNotification, setShowGuestNotification] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Tree[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -75,18 +78,11 @@ export default function Dashboard() {
     if (viewMode === 'owned') {
       query = query.eq('user_id', user.id);
     } else {
-      const { data: sharedIds } = await supabase
-        .from('tree_shares')
-        .select('tree_id')
-        .eq('user_id', user.id);
-
-      const ids = (sharedIds || []).map(s => s.tree_id);
-      if (ids.length === 0) {
-        setTrees([]);
-        setLoading(false);
-        return;
-      }
-      query = query.in('id', ids);
+      // For shared view, show top 5 public trees by default
+      const topPublicTrees = await fetchTopPublicTrees();
+      setTrees(topPublicTrees);
+      setLoading(false);
+      return;
     }
 
     const { data } = await query;
@@ -107,6 +103,63 @@ export default function Dashboard() {
       setTrees(treesWithDue);
     }
     setLoading(false);
+  };
+
+  const searchPublicTrees = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('trees')
+        .select(`
+          id,
+          title,
+          color,
+          created_at,
+          updated_at,
+          users!trees_user_id_fkey(username)
+        `)
+        .eq('is_public', true)
+        .or(`title.ilike.%${query}%,owner_username.ilike.%${query}%`)
+        .order('updated_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const fetchTopPublicTrees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trees')
+        .select(`
+          id,
+          title,
+          color,
+          created_at,
+          updated_at,
+          users!trees_user_id_fkey(username)
+        `)
+        .eq('is_public', true)
+        .order('updated_at', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching top public trees:', error);
+      return [];
+    }
   };
 
   useEffect(() => {
@@ -481,24 +534,22 @@ export default function Dashboard() {
 
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-3">
-            {!isGuest && (
-              <TooltipButton
-                tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
-                onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}
-                className={`btn btn-icon ${viewMode === 'shared' ? '' : 'btn-secondary'}`}
-                style={{
-                  borderRadius: '50%',
-                  width: 38,
-                  height: 38,
-                  padding: 0,
-                  backgroundColor: viewMode === 'shared' ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)'
-                }}
-              >
-                {viewMode === 'owned' ? <LayoutGrid size={20} /> : <Users size={20} />}
-              </TooltipButton>
-            )}
-            <h2 style={{ fontSize: '1.25rem', marginLeft: isGuest ? 0 : '0.5rem' }}>
-              {isGuest ? 'My Trees' : (viewMode === 'owned' ? 'My Repertoire' : 'Shared with Me')}
+            <TooltipButton
+              tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
+              onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}
+              className={`btn btn-icon ${viewMode === 'shared' ? '' : 'btn-secondary'}`}
+              style={{
+                borderRadius: '50%',
+                width: 38,
+                height: 38,
+                padding: 0,
+                backgroundColor: viewMode === 'shared' ? 'var(--accent-color)' : 'rgba(255,255,255,0.25)'
+              }}
+            >
+              {viewMode === 'owned' ? <Search size={20} /> : <LayoutGrid size={20} />}
+            </TooltipButton>
+            <h2 style={{ fontSize: '1.25rem', marginLeft: '0.5rem' }}>
+              {viewMode === 'owned' ? 'My Repertoire' : 'Shared with Me'}
             </h2>
           </div>
           <div className="flex gap-2">
@@ -521,9 +572,44 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Search Interface for Shared/Public Trees */}
+        {viewMode === 'shared' && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ position: 'relative', maxWidth: '400px' }}>
+              <Search
+                size={18}
+                style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)'
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Search public trees by title or owner..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (e.target.value.trim()) {
+                    searchPublicTrees(e.target.value);
+                  } else {
+                    setSearchResults([]);
+                  }
+                }}
+                className="input"
+                style={{
+                  paddingLeft: '2.5rem',
+                  width: '100%',
+                  fontSize: '0.9rem'
+                }}
+              />
+            </div>
+          </div>
+        )}
 
-
-        {trees.length === 0 && !isCreating ? (
+        {trees.length === 0 && !isCreating && viewMode === 'owned' ? (
           <div className="card text-center" style={{ padding: '4rem 2rem' }}>
             <GitMerge size={48} className="text-muted" style={{ margin: '0 auto 1rem auto' }} />
             <h3>No opening trees yet</h3>
@@ -533,9 +619,36 @@ export default function Dashboard() {
               Create Tree
             </button>
           </div>
+        ) : trees.length === 0 && !isCreating && viewMode === 'shared' && searchQuery === '' ? (
+          <div className="card text-center" style={{ padding: '4rem 2rem' }}>
+            <Search size={48} className="text-muted" style={{ margin: '0 auto 1rem auto' }} />
+            <h3>Discover public trees</h3>
+            <p className="text-muted mb-4">Search for trees shared by the community or create your own.</p>
+          </div>
+        ) : searchQuery.trim() && searchResults.length === 0 && !isSearching ? (
+          <div className="card text-center" style={{ padding: '4rem 2rem' }}>
+            <Search size={48} className="text-muted" style={{ margin: '0 auto 1rem auto' }} />
+            <h3>No trees found</h3>
+            <p className="text-muted mb-4">Try searching for different keywords or check your spelling.</p>
+          </div>
+        ) : searchQuery.trim() && isSearching ? (
+          <div className="card text-center" style={{ padding: '4rem 2rem' }}>
+            <div style={{
+              width: 24,
+              height: 24,
+              border: '3px solid var(--border-color)',
+              borderTop: '3px solid var(--accent-color)',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 1rem auto'
+            }} />
+            <h3>Searching...</h3>
+            <p className="text-muted mb-4">Looking for public trees.</p>
+          </div>
         ) : (
           <div className="decks-scroll-container">
-            {trees.map((tree) => (
+            {/* Show search results when searching, otherwise show regular trees */}
+            {(viewMode === 'shared' && searchQuery.trim() ? searchResults : trees).map((tree) => (
               <div key={tree.id} className="card flex flex-col justify-between" style={{ transition: 'transform 0.2s', padding: '1.5rem' }}>
                 <div>
                   <div className="flex items-center justify-between mb-4" style={{ position: 'relative' }}>
@@ -625,8 +738,8 @@ export default function Dashboard() {
                         position: 'absolute',
                         top: -4,
                         right: -4,
-                        width: 10,
-                        height: 10,
+                        width: 15,
+                        height: 15,
                         backgroundColor: '#ef4444',
                         borderRadius: '50%',
                         border: '2px solid var(--panel-bg)'
@@ -638,8 +751,8 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-
-        <ReviewHeatmap />
+        {/* Show heatmap only for owned trees view */}
+        {viewMode === 'owned' && <ReviewHeatmap />}
       </div>
     </>
   );
