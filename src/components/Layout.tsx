@@ -1,37 +1,26 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown, HelpCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useDropdown } from '../hooks/useDropdown';
 import TutorialModal from './TutorialModal';
 
 export default function Layout() {
   const { user, isGuest } = useAuth();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const { isOpen: isDropdownOpen, wrapperRef, toggleDropdown, closeDropdown } = useDropdown();
   const [showTutorial, setShowTutorial] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
-    setIsDropdownOpen(false);
+    closeDropdown();
     await supabase.auth.signOut();
   };
 
   const handleLogin = () => {
-    setIsDropdownOpen(false);
+    closeDropdown();
     // Navigate to login page or open login modal
     window.location.href = '/login';
   };
-
-  // Close on outside click
-  useEffect(() => {
-    function onOutsideClick(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', onOutsideClick);
-    return () => document.removeEventListener('mousedown', onOutsideClick);
-  }, []);
 
   return (
     <div className="app-layout">
@@ -45,7 +34,7 @@ export default function Layout() {
         {/* Profile button + dropdown — uses inline position:relative so dropdown works */}
         <div ref={wrapperRef} style={{ position: 'relative' }}>
           <button
-            onClick={() => setIsDropdownOpen(prev => !prev)}
+            onClick={toggleDropdown}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}
           >
@@ -99,7 +88,7 @@ export default function Layout() {
               {/* Dashboard link */}
               <Link
                 to="/settings"
-                onClick={() => setIsDropdownOpen(false)}
+                onClick={closeDropdown}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -120,7 +109,7 @@ export default function Layout() {
               {/* Tutorial Toggle */}
               <button
                 onClick={() => {
-                  setIsDropdownOpen(false);
+                  closeDropdown();
                   setShowTutorial(true);
                 }}
                 style={{

@@ -1,17 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useMobile } from '../hooks/useMobile';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, GitMerge, LayoutGrid, Users, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2 } from 'lucide-react';
-import { Chess } from 'chess.js';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
-
-interface TreeNode {
-  fen: string;
-  move?: string;
-  children: TreeNode[];
-}
+import type { TreeNode } from '../types/tree';
+import { calculateDuePositions } from '../utils/treeUtils';
 
 interface Tree {
   id: string;
@@ -33,21 +29,14 @@ export default function Dashboard() {
   const [showImportExportModal, setShowImportExportModal] = useState(false);
   const [importExportTab, setImportExportTab] = useState<'export' | 'import'>('export');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useMobile();
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [showGuestNotification, setShowGuestNotification] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = () => {
       if (activeDropdown) {
         setActiveDropdown(null);
       }
@@ -65,29 +54,9 @@ export default function Dashboard() {
       const guestTrees = loadGuestTrees();
       const treesWithDue = guestTrees.map(tree => {
         const reviews = loadGuestReviews(tree.id);
-        const reviewMap = new Map(reviews.map(r => [r.fen, new Date(r.next_review_date)]));
-        
-        // Traverse tree to count due positions (only positions where it's player's turn)
-        let dueCount = 0;
-        const isPlayerWhite = tree.color === 'white';
-
-        function traverse(node: TreeNode) {
-          const chess = new Chess(node.fen);
-          const isWhiteTurn = chess.turn() === 'w';
-          const isSideToMatch = isPlayerWhite ? isWhiteTurn : !isWhiteTurn;
-
-          if (isSideToMatch && node.children && node.children.length > 0) {
-            const nextReview = reviewMap.get(node.fen);
-            const isDue = !nextReview || nextReview <= new Date();
-            if (isDue) dueCount++;
-          }
-
-          if (node.children) {
-            node.children.forEach(child => traverse(child));
-          }
-        }
-
-        if (tree.tree_data) traverse(tree.tree_data);
+        const dueCount = tree.tree_data 
+          ? calculateDuePositions(tree.tree_data, reviews, tree.color)
+          : 0;
         return { ...tree, cards_due: dueCount };
       });
       setTrees(treesWithDue);
@@ -129,29 +98,9 @@ export default function Dashboard() {
           .select('fen, next_review_date')
           .eq('tree_id', tree.id);
 
-        const reviewMap = new Map(reviews?.map(r => [r.fen, new Date(r.next_review_date)]) || []);
-
-        // Traverse tree to count due positions (only positions where it's player's turn)
-        let dueCount = 0;
-        const isPlayerWhite = tree.color === 'white';
-
-        function traverse(node: TreeNode) {
-          const chess = new Chess(node.fen);
-          const isWhiteTurn = chess.turn() === 'w';
-          const isSideToMatch = isPlayerWhite ? isWhiteTurn : !isWhiteTurn;
-
-          if (isSideToMatch && node.children && node.children.length > 0) {
-            const nextReview = reviewMap.get(node.fen);
-            const isDue = !nextReview || nextReview <= new Date();
-            if (isDue) dueCount++;
-          }
-
-          if (node.children) {
-            node.children.forEach(child => traverse(child));
-          }
-        }
-
-        if (tree.tree_data) traverse(tree.tree_data);
+        const dueCount = tree.tree_data 
+          ? calculateDuePositions(tree.tree_data, reviews || [], tree.color)
+          : 0;
         return { ...tree, cards_due: dueCount };
       }));
       setTrees(treesWithDue);

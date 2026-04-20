@@ -1,113 +1,19 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import TreeNotFound from './TreeNotFound';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
-import ForceTree, { type TreeNode } from '../components/ForceTree';
+import ForceTree from '../components/ForceTree';
 import { useAuth } from '../hooks/useAuth';
+import { useMobile } from '../hooks/useMobile';
 import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
+import type { TreeNode } from '../types/tree';
+import { uciToArrow, stripPending, findNode, countNodes, hasDuplicateFen, deleteNodeFromTree, parsePgnMoves } from '../utils/treeUtils';
 
-// ── Utility helpers ───────────────────────────────────────────────────────────
-function uciToArrow(uci: string) {
-  if (!uci || uci.length < 4) return null;
-  return { startSquare: uci.slice(0, 2), endSquare: uci.slice(2, 4), color: 'rgba(225,29,72,0.85)' };
-}
-
-function stripPending(node: TreeNode): TreeNode {
-  const { isPending: _removed, ...rest } = node;
-  return { ...rest, children: node.children.map(stripPending) };
-}
-
-function findNode(node: TreeNode, fen: string): TreeNode | null {
-  if (node.fen === fen) return node;
-  for (const child of node.children) {
-    const hit = findNode(child, fen);
-    if (hit) return hit;
-  }
-  return null;
-}
-
-function countNodes(node: TreeNode): number {
-  let count = 1;
-  for (const child of node.children) {
-    count += countNodes(child);
-  }
-  return count;
-}
-
-function hasDuplicateFen(root: TreeNode, targetFen: string, count = 0): number {
-  if (root.fen === targetFen) count++;
-  for (const child of root.children) {
-    count = hasDuplicateFen(child, targetFen, count);
-  }
-  return count;
-}
-
-function deleteNodeFromTree(parent: TreeNode, targetFen: string): boolean {
-  for (let i = 0; i < parent.children.length; i++) {
-    if (parent.children[i].fen === targetFen) {
-      parent.children.splice(i, 1);
-      return true;
-    }
-    if (deleteNodeFromTree(parent.children[i], targetFen)) return true;
-  }
-  return false;
-}
-
-function parsePgnMoves(pgn: string): { moves: string[]; finalFen: string } {
-  // Extract just the move text
-  const moveText = pgn
-    .replace(/\[[^\]]*\]/g, '')      // Remove [Event "..."] headers
-    .replace(/\{[^}]*\}/g, '')       // Remove {comment} annotations  
-    .replace(/\d+\.\s*\.\./g, ' ')  // Remove "1. ..." ellipsis
-    .replace(/\d+\.\s*/g, ' ')       // Remove "1. " move numbers
-    .trim();
-
-  // Split into tokens - extract all potential moves
-  const tokens = moveText.split(/\s+/);
-  const rawMoves: string[] = [];
-  
-  for (const token of tokens) {
-    // Remove result markers and keep only chess notation
-    let clean = token.replace(/[^a-hKQRBNP12345678O=?+#]/g, '');
-    if (!clean || clean.length < 2) continue;
-    if (clean === '1-0' || clean === '0-1' || clean === '1/2-1/2' || clean === '*') continue;
-    rawMoves.push(clean);
-  }
-
-  // Try to build move list by playing on a chess board
-  const validMoves: string[] = [];
-  const game = new Chess();
-  
-  for (const move of rawMoves) {
-    try {
-      const result = game.move(move);
-      if (result) {
-        validMoves.push(move);
-      }
-    } catch {
-      // If exact match fails, try fuzzy match
-      const possible = game.moves({ verbose: true });
-      const matched = possible.find(m => 
-        m.san === move || 
-        m.san.replace(/[+#?!=]/g, '') === move.replace(/[+#?!=]/g, '') ||
-        m.san.startsWith(move.replace(/[+#?!=]/g, ''))
-      );
-      if (matched) {
-        try {
-          game.move(matched.san);
-          validMoves.push(matched.san);
-        } catch {}
-      }
-    }
-  }
-
-  return { moves: validMoves, finalFen: game.fen() };
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
+// Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
   const { user, isGuest, getGuestTree, saveGuestTree } = useAuth();
   const { id } = useParams();
@@ -116,6 +22,7 @@ export default function TreeEditor() {
   const [treeMeta, setTreeMeta] = useState<any>(null);
   const [treeData, setTreeData] = useState<TreeNode | null>(null);
   const [loading, setLoading] = useState(true);
+  const [treeNotFound, setTreeNotFound] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasPending, setHasPending] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0, active: false });
@@ -132,14 +39,7 @@ export default function TreeEditor() {
   const [importPgnText, setImportPgnText] = useState('');
   const [importedBranch, setImportedBranch] = useState<TreeNode | null>(null);
   const [showMenu, setShowMenu] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useMobile();
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -287,6 +187,8 @@ export default function TreeEditor() {
         gameRef.current = new Chess(root.fen);
         setCurrentFen(root.fen);
         setViewOnly(false); // Guests can edit their own trees
+      } else {
+        setTreeNotFound(true);
       }
       setLoading(false);
     } else if (user) {
@@ -314,6 +216,8 @@ export default function TreeEditor() {
               setViewOnly(true);
             }
           }
+        } else {
+          setTreeNotFound(true);
         }
         setLoading(false);
       })();
@@ -521,12 +425,10 @@ export default function TreeEditor() {
       Loading tree…
     </div>
   );
-  if (!treeMeta) return <div style={{ padding: 20 }}>Tree not found.</div>;
+  if (treeNotFound || !treeMeta) return <TreeNotFound />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - var(--header-height) - 4rem)', gap: '1rem' }}>
-
-
       {/* Share Modal */}
       {showShareModal && (
         <div style={{

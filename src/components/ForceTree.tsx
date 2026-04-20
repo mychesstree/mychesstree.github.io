@@ -148,13 +148,39 @@ export default function ForceTree({ data, currentFen, onNodeClick, isDeleteMode,
       svg.transition().duration(600).ease(d3.easeCubicOut).call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
     };
 
+    // Create link force with alternating distances for chess notation flow
+    const linkForce = d3.forceLink(links)
+      .id((d: any) => d.id)
+      .distance((d: any) => {
+        // Get source and target node depths
+        const sourceNode = nodes.find(n => n.id === d.source.id || n.id === d.source);
+        const targetNode = nodes.find(n => n.id === d.target);
+        
+        if (!sourceNode || !targetNode) return 80;
+        
+        // Alternate distances: shorter for consecutive moves, longer for move transitions
+        const targetDepth = targetNode.depth;
+        const isEvenDepth = targetDepth % 2 === 0;
+        
+        // Even depths (white's moves): shorter distance (60px)
+        // Odd depths (black's moves): longer distance (100px) 
+        return isEvenDepth ? 60 : 100;
+      })
+      .strength(0.8);
+
     const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(80).strength(0.8))
-      .force('charge', d3.forceManyBody().strength(-300).distanceMax(300))
+      .force('link', linkForce)
+      .force('charge', d3.forceManyBody().strength(-350).distanceMax(250))
       // Spread nodes horizontally by depth
       .force('x', d3.forceX((d: any) => (d.depth * 150) + 100).strength(0.8))
-      // For imported nodes with yOffset, use that; otherwise center
-      .force('y', d3.forceY((d: any) => d.yOffset !== undefined ? (height / 2) + d.yOffset : height / 2).strength(0.5))
+      // Add slight vertical spreading for deeper nodes
+      .force('y', d3.forceY((d: any) => {
+        if (d.yOffset !== undefined) return (height / 2) + d.yOffset;
+        // Subtle vertical spread for deeper nodes only
+        const depthSpread = (d.depth / maxDepth) * 50;
+        const randomOffset = 2 * depthSpread;
+        return (height / 2) + randomOffset;
+      }).strength(0.2))
       .force('collision', d3.forceCollide(35))
       .alphaDecay(0.04);
 

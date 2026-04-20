@@ -8,6 +8,7 @@ import TreeEditor from './pages/TreeEditor';
 import Review from './pages/Review';
 import Settings from './pages/Settings';
 import UpdatePassword from './pages/UpdatePassword';
+import TreeNotFound from './pages/TreeNotFound';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isGuest, loading } = useAuth();
@@ -32,6 +33,7 @@ function App() {
               <Route path="review/:id" element={<Review />} />
               <Route path="settings" element={<Settings />} />
             </Route>
+            <Route path="*" element={<TreeNotFound />} />
           </Routes>
         </HashRouter>
       </TooltipProvider>
