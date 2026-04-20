@@ -154,7 +154,7 @@ export default function PublicTrees() {
                 <h3 style={{ margin: 0, fontSize: '1.2rem', borderBottom: tree.color === 'white' ? '3px solid #fff' : '3px solid #444', display: 'inline-block', lineHeight: '1.3' }}>
                   {tree.title}
                 </h3>
-                <Globe size={16} color="#22c55e" style={{ flexShrink: 0 }} />
+                <Globe size={16} color="#ffffff" style={{ flexShrink: 0 }} />
               </div>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
