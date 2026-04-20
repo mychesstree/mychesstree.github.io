@@ -16,13 +16,11 @@ MyChessTree is a chess repertoire trainer that combines the power of interactive
 
 Todo:
 import study from lichess
-add arrows left right on top right of the force tree for mobile users to navigate and allow arrows on temp nodes
 
 Notes:
 - Under Shared with me remove create tree button and just say no trees shared with you
 - Fix re-center on node 
 - Lets create a public list for trees that people can browse and use
 - under the tree name in the tree editor, under share add a button to make the tree public for read access 
-- import data from lichess and export data (free unlimited) review as well
 - Bughouse mode
 - help me understand the space complexity of storing the tree and the average storage we can expect per user. help me understand how we could limit users to 6 trees

@@ -926,7 +926,16 @@ export default function TreeEditor() {
               className="eval-bar-wrapper"
               data-tooltip="Engine Evaluation"
             >
-              <div className="eval-bar-bg">
+              <div 
+                className="eval-bar-bg"
+                style={{
+                  display: 'flex',
+                  flexDirection: window.innerWidth > 768 
+                    ? (treeMeta?.color === 'black' ? 'column' : 'column-reverse')
+                    : (treeMeta?.color === 'black' ? 'row' : 'row-reverse'),
+                  justifyContent: 'flex-start'
+                }}
+              >
                 <div
                   className="eval-bar-fill"
                   style={{
