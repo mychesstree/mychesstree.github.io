@@ -58,7 +58,7 @@ export default function PuzzleInterface({ game, positionIndex, onClose, onNext, 
   const { success: showSuccess, info: showInfo, error: showError } = useToast();
   const gameRef = useRef(new Chess());
   const [currentPosition, setCurrentPosition] = useState<PuzzlePosition | null>(null);
-  const [userMove, setUserMove] = useState<string | null>(null);
+  const [, setUserMove] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [startTime, setStartTime] = useState<number>(Date.now());
   
@@ -270,7 +270,7 @@ export default function PuzzleInterface({ game, positionIndex, onClose, onNext, 
           title: newTitle,
           description: '',
           color: newColor,
-          user_id: user.id,
+          user_id: user!.id,
           is_public: false,
           data: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', children: [] },
           stars: 0,
@@ -299,11 +299,11 @@ export default function PuzzleInterface({ game, positionIndex, onClose, onNext, 
 
   const fetchUserTrees = async () => {
     try {
-      console.log('Fetching trees for user:', user.id);
+      console.log('Fetching trees for user:', user!.id);
       const { data, error } = await supabase
         .from('trees')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', user!.id)
         .eq('is_daily_game', false)
         .order('updated_at', { ascending: false });
       

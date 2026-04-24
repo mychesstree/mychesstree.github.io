@@ -78,8 +78,7 @@ export default function TreeEditor() {
   const [cachedChesscomEntries, setCachedChesscomEntries] = useState<any[]>([]);
   const [tempTreeData, setTempTreeData] = useState<TreeNode | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [hasFetchedGames, setHasFetchedGames] = useState(false);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+    const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [treeFullscreen, setTreeFullscreen] = useState(false);
   const [history, setHistory] = useState<TreeNode[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -759,7 +758,6 @@ export default function TreeEditor() {
     setShowChesscomModal(true);
     setChesscomUsername(entry.username);
     setSelectedMonth(entry.month);
-    setHasFetchedGames(true);
     setChesscomImportStatus({ type: 'success', msg: `Loaded ${entry.games.length} cached games for ${entry.month}.` });
   }, []);
 
@@ -945,7 +943,6 @@ export default function TreeEditor() {
 
   // Reset fetch state when username or month changes
   useEffect(() => {
-    setHasFetchedGames(false);
     setSelectedChesscomGames(new Set());
   }, [chesscomUsername, selectedMonth]);
 
@@ -994,7 +991,6 @@ export default function TreeEditor() {
       }
 
       setChesscomGames(games);
-      setHasFetchedGames(true);
       setChesscomImportStatus({ type: 'success', msg: '' });
     } catch (error) {
       console.error('Chess.com import error:', error);
@@ -2190,7 +2186,6 @@ export default function TreeEditor() {
                       // Don't reset selectedMonth - keep current month default
                       setChesscomGames([]);
                       setSelectedChesscomGames(new Set());
-                      setHasFetchedGames(false);
                       setChesscomImportStatus({ type: '', msg: '' });
                     }}
                     className="btn btn-secondary"

@@ -196,13 +196,12 @@ export default function Pricing() {
 
             <button
               onClick={() => {
-                if (isPro && plan.id === 'pro') {
+                if (isPro() && plan.id === 'pro') {
                   handleManageSubscription();
                 } else if (plan.id !== 'free') {
                   handleSubscribe(plan);
                 }
               }}
-              disabled={isProcessing || selectedPlan === plan.id || (isPro && plan.id === 'pro')}
               className={`btn ${plan.popular ? 'btn-primary' : 'btn-secondary'}`}
               style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 'bold' }}
             >
@@ -211,7 +210,7 @@ export default function Pricing() {
                   <div className="spinner" style={{ width: '16px', height: '16px' }} />
                   Processing...
                 </div>
-              ) : isPro && plan.id === 'pro' ? (
+              ) : isPro() && plan.id === 'pro' ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <CreditCard size={16} />
                   Manage Subscription

@@ -740,7 +740,7 @@ function parseChesscomGames(gamesData: ChesscomGameData[], username: string): Ar
   
   // Log the dates of returned games for debugging
   games.forEach((game, index) => {
-    console.log(`Game ${index + 1}: ID=${game.id}, Date=${game.date}, White=${game.white.username}, Black=${game.black.username}`);
+    console.log(`Game ${index + 1}: ID=${game.id}, Date=${game.date}, White=${game.white?.username}, Black=${game.black?.username}`);
   });
   
   return games;
