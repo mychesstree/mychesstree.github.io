@@ -283,7 +283,7 @@ export default function Dashboard() {
       // Guest user - delete from localStorage
       const guestTrees = loadGuestTrees();
       const updatedTrees = guestTrees.filter(t => t.id !== treeId);
-      localStorage.setItem('mychesstree_guest_trees', JSON.stringify(updatedTrees));
+      localStorage.setItem('chesstr.ee_guest_trees', JSON.stringify(updatedTrees));
       setDeleteConfirm(null);
       setActiveDropdown(null);
       loadTrees(); // Refresh the tree list
@@ -348,7 +348,7 @@ export default function Dashboard() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mychesstree-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `chesstr.ee-export-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -423,7 +423,7 @@ export default function Dashboard() {
       loadTrees(); // Refresh the tree list
       setShowImportExportModal(false);
     } catch (error) {
-      showError('Import failed. Please make sure the file is a valid MyChessTree export.');
+      showError('Import failed. Please make sure the file is a valid chesstr.ee export.');
     }
 
     // Reset file input

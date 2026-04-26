@@ -16,7 +16,9 @@ export default function Landing() {
         <div className="hero-content">
           <h1 className="hero-title">
             Master Your Openings with
-            <span className="brand-name"> MyChessTree</span>
+            <span className="brand-name">
+              {' '}chesstr<span className="brand-suffix">.ee</span>
+            </span>
           </h1>
           <p className="hero-subtitle">
             Build, organize, and perfect your chess opening repertoire with intelligent tree visualization 
@@ -34,7 +36,7 @@ export default function Landing() {
         </div>
         <div className="hero-visual">
           <div className="demo-image-container-large">
-            <img src="/demo.png" alt="MyChessTree Demo" className="demo-image-large" />
+            <img src="/demo.png" alt="chesstr.ee Demo" className="demo-image-large" />
           </div>
         </div>
       </section>
@@ -102,7 +104,7 @@ export default function Landing() {
         <div className="container">
           <h2 className="cta-title">Ready to Transform Your Opening Play?</h2>
           <p className="cta-subtitle">
-            Join thousands of players who have improved their chess with MyChessTree
+            Join thousands of players who have improved their chess with chesstr.ee
           </p>
           <div className="cta-actions">
             <Link to="/login" className="btn btn-primary btn-large">

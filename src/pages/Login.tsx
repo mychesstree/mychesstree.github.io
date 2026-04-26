@@ -66,7 +66,7 @@ export default function Login() {
     <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: 'var(--bg-color)' }}>
       <div className="card" style={{ maxWidth: '400px', width: '100%', margin: '0 1rem' }}>
         <div className="flex items-center gap-4 mb-8">
-          <img src="/logo.svg" alt="MyChessTree Logo" style={{ height: 48, width: 'auto' }} />
+          <img src="/logo.svg" alt="chesstr.ee Logo" style={{ height: 48, width: 'auto' }} />
           <div>
             <h1 style={{ fontSize: '2rem', marginTop: 10 }}>
               {mode === 'signup' ? 'Create Account' : mode === 'forgot' ? 'Reset' : 'Welcome Back'}

@@ -21,7 +21,7 @@ export default function TutorialModal({ isOpen, onClose }: TutorialModalProps) {
         </button>
         <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <HelpCircle size={24} color="var(--accent-color)" />
-          How to use MyChessTree
+          How to use chesstr.ee
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <TutorialStep icon={<Play size={18} />} title="Build Your Tree" text="Make moves on the board to add them to your tree. New moves appear in yellow until saved." />

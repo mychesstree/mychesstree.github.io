@@ -1,5 +1,5 @@
-# ♟️ MyChessTree
-MyChessTree is a chess repertoire trainer that combines the power of interactive tree mapping with a Spaced Repetition System. Designed for all levels, it helps you build, visualize, and memorize your opening lines. I reccomend looking at master games where you can see which lines you can predict with higher accuracy and then trace their roots back to the opening.
+# ♟️ chesstr.ee
+chesstr.ee is a chess repertoire trainer that combines the power of interactive tree mapping with a Spaced Repetition System. Designed for all levels, it helps you build, visualize, and memorize your opening lines. I reccomend looking at master games where you can see which lines you can predict with higher accuracy and then trace their roots back to the opening.
 
 ![Demo](public/demo.png)
 

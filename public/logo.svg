@@ -1,13 +1,45 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M16 56C16 59.75 26.9375 61 33.5 61C40.0625 61 51 59.75 51 56C51 52.25 39.5128 51 33.5 51C27.4871 51 16 52.25 16 56Z" fill="url(#paint0_linear_1_839)"/>
-<path d="M18 54C24 56 32 56 32 56C32 56 40 56 46 54C43 45 50 39 50 30C50 15 32 11 32 11V16C32 16 17 27 16 28C15 29 15.5528 30.1056 16 31C17 33 18 34 19 35C20 36 21 36 22 35C23 34 25 33 26 33C27 33 30 34 31 34C32 34 36 33 38 31C33 36 30 36 27 38C24 40 18 46 18 54Z" fill="white"/>
-<path d="M45 48L46 54L37 56C35 41 48 40 48 30C51 33 45 48 45 48Z" fill="#CCCCCC"/>
-<path d="M18 54C24 56 32 56 32 56C32 56 40 56 46 54C43 45 50 39 50 30C50 15 32 11 32 11V16C32 16 17 27 16 28C15 29 15.5528 30.1056 16 31C17 33 18 34 19 35C20 36 21 36 22 35C23 34 25 33 26 33C27 33 30 34 31 34C32 34 36 33 38 31C33 36 30 36 27 38C24 40 18 46 18 54Z" stroke="black" stroke-width="3.99999" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M33 25C34.1046 25 35 24.1046 35 23C35 21.8954 34.1046 21 33 21C31.8954 21 31 21.8954 31 23C31 24.1046 31.8954 25 33 25Z" fill="black"/>
-<path d="M45 48C40 50 32 50 32 50C32 50 24 50 19 48" stroke="black" stroke-width="3.99999" stroke-linejoin="round"/>
-<defs>
-<linearGradient id="paint0_linear_1_839" x1="16" y1="103.5" x2="424.489" y2="103.5" gradientUnits="userSpaceOnUse">
-<stop stop-opacity="0.2"/>
-</linearGradient>
-</defs>
+  <circle cx="32" cy="32" r="30" fill="url(#bg)" />
+  <circle cx="32" cy="32" r="29" stroke="#7F1D3A" stroke-width="2" />
+
+  <!-- Bishop inspired by caliente bb.svg -->
+  <g transform="translate(3.2 2.2) scale(0.9)">
+    <path d="M24 49C7 28 32 13 32 13C32 13 57 28 40 49" fill="#595959" />
+    <path d="M33 16C26 24 19 41 34 50L24 49C8 32 22 17 32 15L33 16Z" fill="#8C8C8C" />
+    <path
+      d="M24 49C7 26 32 15 32 15C32 15 57 26 40 49"
+      stroke="#111111"
+      stroke-width="2.8"
+      stroke-miterlimit="2.4"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M19 48C19 48 18 50 18 54C24 56 32 56 32 56C32 56 40 56 46 54C46 50 45 48 45 48C40 50 32 50 32 50C32 50 24 50 19 48Z"
+      fill="#595959"
+    />
+    <path d="M19 48L18 54L25 55L26 50L19 48Z" fill="#8C8C8C" />
+    <path
+      d="M19 48C19 48 18 50 18 54C24 56 32 56 32 56C32 56 40 56 46 54C46 50 45 48 45 48C40 50 32 50 32 50C32 50 24 50 19 48Z"
+      stroke="#111111"
+      stroke-width="2.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle cx="32" cy="11" r="4" fill="#8C8C8C" stroke="#111111" stroke-width="2.8" />
+    <path
+      d="M32 15C44 21 36 29 32 33"
+      stroke="#111111"
+      stroke-width="2.8"
+      stroke-miterlimit="2.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </g>
+
+  <defs>
+    <linearGradient id="bg" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B0D1E" />
+      <stop offset="1" stop-color="#5A1531" />
+    </linearGradient>
+  </defs>
 </svg>

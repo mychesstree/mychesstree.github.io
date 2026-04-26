@@ -234,7 +234,7 @@ export default function Pricing() {
           <h3 style={{ margin: 0, color: 'var(--accent-color)' }}>30-Day Money Back Guarantee</h3>
         </div>
         <p style={{ color: 'var(--text-muted)', margin: '0 auto', maxWidth: '600px' }}>
-          Not satisfied with MyChessTree Pro? Get a full refund within 30 days, no questions asked.
+          Not satisfied with chesstr.ee Pro? Get a full refund within 30 days, no questions asked.
         </p>
       </div>
     </div>

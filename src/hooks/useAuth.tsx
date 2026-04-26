@@ -41,8 +41,8 @@ interface AuthContextType {
   getGuestReview: (fen: string, treeId: string) => GuestReview | undefined;
 }
 
-const GUEST_TREES_KEY = 'mychesstree_guest_trees';
-const GUEST_REVIEWS_KEY = 'mychesstree_guest_reviews';
+const GUEST_TREES_KEY = 'chesstr.ee_guest_trees';
+const GUEST_REVIEWS_KEY = 'chesstr.ee_guest_reviews';
 
 const AuthContext = createContext<AuthContextType>({ 
   user: null, 
