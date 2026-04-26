@@ -55,7 +55,7 @@ function calculateSM2(rating: number, oldInterval: number, oldRepetitions: numbe
 export default function Review() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const {isGuest, getGuestTree, loadGuestReviews, saveGuestReview } = useAuth();
+  const { isGuest, getGuestTree, loadGuestReviews, saveGuestReview } = useAuth();
   const [treeMeta, setTreeMeta] = useState<any>(null);
 
   const gameRef = useRef(new Chess());
@@ -307,7 +307,7 @@ export default function Review() {
   return (
     <div className="review-layout">
       <div className="review-board-container">
-        <div className="card" style={{ padding: '1rem', position: 'relative', overflow: 'hidden' }}>
+        <div className="card" style={{ padding: '0rem', position: 'relative', overflow: 'hidden', marginTop: '3rem' }}>
           {(() => {
             const Board = Chessboard as any;
             return <Board

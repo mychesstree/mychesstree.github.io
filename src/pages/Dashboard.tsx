@@ -622,8 +622,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2 mb-4" style={{ marginBottom: `${isMobile ? '1.5rem' : '0'}` }}>
+          <div className="flex items-center gap-3" >
             <TooltipButton
               tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
               onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}

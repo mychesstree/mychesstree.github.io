@@ -50,7 +50,7 @@ export default function TreeEditor() {
   const [importedBranch] = useState<TreeNode | null>(null);
   const [studyUrl, setStudyUrl] = useState('');
   const [studyImportStatus, setStudyImportStatus] = useState<{ type: 'loading' | 'error' | 'success' | ''; msg: string }>({ type: '', msg: '' });
-  
+
   // Archive import state
   const [archiveUsername, setArchiveUsername] = useState('');
   const [archiveColor, setArchiveColor] = useState<'white' | 'black' | 'both'>('both');
@@ -78,7 +78,7 @@ export default function TreeEditor() {
   const [cachedChesscomEntries, setCachedChesscomEntries] = useState<any[]>([]);
   const [tempTreeData, setTempTreeData] = useState<TreeNode | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-    const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [treeFullscreen, setTreeFullscreen] = useState(false);
   const [history, setHistory] = useState<TreeNode[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -114,21 +114,25 @@ export default function TreeEditor() {
       setTreeData(newTree);
       setHistoryIndex(prev => prev - 1);
       setHasPending(true);
+
+      // TODO: set the fen to the previous fen
+      // const newFen = gameRef.current.fen();
+      // setCurrentFen(newFen);
     }
   }, [history, historyIndex]);
 
-  // Keyboard navigation - left/right arrows
+  // Keyboard navigation 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!treeData) return;
-      
+
       // Undo functionality (Ctrl/Cmd + Z)
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
         return;
       }
-      
+
       // Find current node in tree
       const findNode = (node: TreeNode, fen: string): TreeNode | null => {
         if (node.fen === fen) return node;
@@ -194,7 +198,7 @@ export default function TreeEditor() {
             }
             return null;
           };
-          
+
           // Check if we're in the imported branch
           const importedCurrentNode = findInImportedBranch(importedBranch, currentFen);
           if (importedCurrentNode) {
@@ -224,7 +228,7 @@ export default function TreeEditor() {
             return;
           }
         }
-        
+
         // Otherwise find parent in tree
         const findParent = (node: TreeNode, targetFen: string, parent: TreeNode | null): TreeNode | null => {
           if (node.fen === targetFen) return parent;
@@ -250,9 +254,9 @@ export default function TreeEditor() {
           return null;
         };
 
-        
+
         const result = findParentWithMultipleChildren(treeData, currentFen);
-        
+
         if (result) {
           const { parent, currentChildIndex } = result;
           let nextIndex;
@@ -263,12 +267,12 @@ export default function TreeEditor() {
             // Go to next sibling (wrap around)
             nextIndex = currentChildIndex === parent.children.length - 1 ? 0 : currentChildIndex + 1;
           }
-          
+
           const nextSibling = parent.children[nextIndex];
           gameRef.current = new Chess(nextSibling.fen);
           setCurrentFen(nextSibling.fen);
         }
-        
+
         // Also check imported branch for sibling navigation
         if (importedBranch && importedBranch.children.length > 0) {
           const findInImportedBranch = (node: TreeNode, targetFen: string): TreeNode | null => {
@@ -291,11 +295,11 @@ export default function TreeEditor() {
 
           const findParentWithMultipleChildrenInImported = (tree: TreeNode, startFen: string, maxDepth: number = 4): { parent: TreeNode; currentChildIndex: number } | null => {
             let currentFen = startFen;
-            
+
             for (let depth = 0; depth < maxDepth; depth++) {
               const parent = findParentInImportedBranch(tree, currentFen, null);
               if (!parent) break;
-              
+
               if (parent.children.length > 1) {
                 const currentIndex = parent.children.findIndex(child => child.fen === currentFen);
                 if (currentIndex !== -1) {
@@ -318,7 +322,7 @@ export default function TreeEditor() {
               } else {
                 nextIndex = currentChildIndex === parent.children.length - 1 ? 0 : currentChildIndex + 1;
               }
-              
+
               const nextSibling = parent.children[nextIndex];
               gameRef.current = new Chess(nextSibling.fen);
               setCurrentFen(nextSibling.fen);
@@ -405,7 +409,7 @@ export default function TreeEditor() {
   // Load Tree
   useEffect(() => {
     if (!id) return;
-    
+
     if (isGuest) {
       // Guest user - first try to load from localStorage, then try public trees
       const tree = getGuestTree(id);
@@ -493,20 +497,20 @@ export default function TreeEditor() {
 
   const togglePublic = async () => {
     if (!id || !user || isGuest) return;
-    
+
     const newPublicStatus = !isPublic;
     const { error } = await supabase
       .from('trees')
-      .update({ 
+      .update({
         is_public: newPublicStatus,
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
-    
+
     if (!error) {
       setIsPublic(newPublicStatus);
       setTreeMeta((prev: any) => prev ? { ...prev, is_public: newPublicStatus } : null);
-      
+
       // Show URL modal when making tree public
       if (newPublicStatus) {
         setShowPublicUrlModal(true);
@@ -608,7 +612,7 @@ export default function TreeEditor() {
     if (!id || !treeData) return;
     setSaving(true);
     const cleaned = stripPending(treeData);
-    
+
     if (isGuest) {
       // Guest user - save to localStorage
       const tree = getGuestTree(id);
@@ -646,7 +650,7 @@ export default function TreeEditor() {
 
     // Find divergence point using utility function
     const { divergenceIndex, divergenceNode } = findDivergencePoint(treeData, moves);
-    
+
     console.log('Divergence point:', { divergenceIndex, divergenceNode: divergenceNode?.fen });
 
     // If all moves exist
@@ -667,7 +671,7 @@ export default function TreeEditor() {
     setTempTreeData(updatedTree);
     setHasUnsavedChanges(true);
     setStudyImportStatus({ type: 'success', msg: `PGN imported with ${moves.length - divergenceIndex} new moves. Click Save to make permanent.` });
-    
+
     setShowImportModal(false);
     setImportPgnText('');
   }, [importPgnText, treeData]);
@@ -692,7 +696,7 @@ export default function TreeEditor() {
       // Check cache first
       let cachedStudy = studyCache.getStudy(studyId);
       let study;
-      
+
       if (!cachedStudy) {
         setStudyImportStatus({ type: 'loading', msg: 'Fetching study from Lichess...' });
         study = await fetchLichessStudy(studyId);
@@ -709,7 +713,7 @@ export default function TreeEditor() {
 
       // Parse all chapters from the study data
       const chapters: Array<{ name: string; tree: TreeNode }> = [];
-      
+
       for (const chapter of study.chapters) {
         try {
           if (chapter.pgn) {
@@ -743,7 +747,7 @@ export default function TreeEditor() {
   const handleAddStudyChapter = useCallback((chapterTree: TreeNode, chapterName: string) => {
     // Use temporary editing system
     handleAddChapterTemp(chapterTree, chapterName);
-    
+
     // Close the modal
     setShowImportModal(false);
     setImportedStudyChapters([]);
@@ -768,15 +772,15 @@ export default function TreeEditor() {
     }
   }, [loadCachedChesscomEntries]);
 
-  
+
   const handleSelectStudy = useCallback((study: any) => {
     setSelectedStudy(study);
     setShowStudySelector(false);
     setSelectedChapters(new Set()); // Reset selection when opening new study
-    
+
     // Parse chapters from cached study
     const chapters: Array<{ name: string; tree: TreeNode }> = [];
-    
+
     for (const chapter of study.chapters) {
       try {
         if (chapter.pgn) {
@@ -793,7 +797,7 @@ export default function TreeEditor() {
         showError(`Failed to parse chapter ${chapter.id}`);
       }
     }
-    
+
     setImportedStudyChapters(chapters);
     setShowChaptersModal(true);
   }, []);
@@ -808,20 +812,20 @@ export default function TreeEditor() {
 
     // Use current tree data or temporary tree data as base
     const baseTree = tempTreeData || treeData || { fen: new Chess().fen(), children: [] };
-    
+
     // Find divergence point and add moves as variation
     const { divergenceIndex } = findDivergencePoint(baseTree, chapterMoves);
-    
+
     if (divergenceIndex === chapterMoves.length) {
       setStudyImportStatus({ type: 'error', msg: `All moves from "${chapterName}" already exist in your tree!` });
       return;
     }
 
     const updatedTree = addMovesAsVariation(baseTree, chapterMoves, divergenceIndex);
-    
+
     setTempTreeData(updatedTree);
     setHasUnsavedChanges(true);
-    
+
     // Show notification with details
     const newMovesCount = chapterMoves.length - divergenceIndex;
     setStudyImportStatus({ type: 'success', msg: `Added "${chapterName}" with ${newMovesCount} new moves. Click Save to make permanent.` });
@@ -842,7 +846,7 @@ export default function TreeEditor() {
 
   const handleNodeUpdate = useCallback((nodeFen: string, title: string, description: string) => {
     if (!treeData) return;
-    
+
     const updateNodeInfo = (node: TreeNode): TreeNode => {
       if (node.fen === nodeFen) {
         return { ...node, title, description };
@@ -852,7 +856,7 @@ export default function TreeEditor() {
         children: node.children.map(updateNodeInfo)
       };
     };
-    
+
     const updatedTree = updateNodeInfo(treeData);
     setTreeData(updatedTree);
     addToHistory(updatedTree);
@@ -894,7 +898,7 @@ export default function TreeEditor() {
       // Filter out games that already exist in the tree
       const currentTree = tempTreeData || treeData;
       const filteredGames = filterDuplicateGames(games, currentTree);
-      
+
       if (filteredGames.length === 0) {
         setArchiveImportStatus({ type: 'success', msg: 'All fetched games are already in your tree.' });
         return;
@@ -902,7 +906,7 @@ export default function TreeEditor() {
 
       setFetchedGames(filteredGames);
       const skippedCount = games.length - filteredGames.length;
-      const msg = skippedCount > 0 
+      const msg = skippedCount > 0
         ? `Found ${filteredGames.length} new games (${skippedCount} already imported). Select games to import.`
         : `Found ${filteredGames.length} games. Select games to import.`;
       setArchiveImportStatus({ type: 'success', msg });
@@ -918,14 +922,14 @@ export default function TreeEditor() {
   const generateAvailableMonths = useCallback(() => {
     const months = [];
     const currentDate = new Date();
-    
+
     for (let i = 1; i <= 12; i++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
       const monthString = date.toISOString().slice(0, 7); // YYYY-MM format
       const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
       months.push({ value: monthString, label: monthName });
     }
-    
+
     return months;
   }, []);
 
@@ -970,7 +974,7 @@ export default function TreeEditor() {
       // Check cache first
       let cachedGames = chesscomCache.getGames(chesscomUsername, selectedMonth);
       let games;
-      
+
       if (cachedGames) {
         setChesscomImportStatus({ type: 'loading', msg: 'Loading from cache...' });
         games = cachedGames.games;
@@ -982,7 +986,7 @@ export default function TreeEditor() {
           batchSize: 50,
           month: selectedMonth
         });
-        
+
         // Save to cache
         if (games.length > 0) {
           chesscomCache.saveGames(chesscomUsername, selectedMonth, games);
@@ -1027,10 +1031,10 @@ export default function TreeEditor() {
 
     const selectedGames = chesscomGames.filter(game => selectedChesscomGames.has(game.id));
     const currentTree = tempTreeData || treeData || { fen: new Chess().fen(), children: [] };
-    
+
     // Process games to tree structure
     const chesscomTree = processGamesToTree(selectedGames, 10, currentTree);
-    
+
     if (chesscomTree.children.length === 0) {
       setChesscomImportStatus({ type: 'error', msg: `No valid moves found in ${selectedGames.length} selected game(s). The games may be incomplete or have invalid PGN format.` });
       return;
@@ -1041,7 +1045,7 @@ export default function TreeEditor() {
     let updatedTree = JSON.parse(JSON.stringify(currentTree));
     let totalNewMoves = 0;
     let skippedGames = 0;
-    
+
     // Add each game as a separate branch from the root
     for (const gameBranch of chesscomTree.children) {
       // Find if this game already exists in the tree
@@ -1054,7 +1058,7 @@ export default function TreeEditor() {
         skippedGames++;
       }
     }
-    
+
     if (totalNewMoves === 0 && skippedGames > 0) {
       setChesscomImportStatus({ type: 'error', msg: `All selected games already exist in your tree! Try selecting different games.` });
       return;
@@ -1062,17 +1066,17 @@ export default function TreeEditor() {
       setChesscomImportStatus({ type: 'error', msg: `No valid moves found in ${selectedGames.length} selected game(s). The games may be incomplete or have invalid PGN format.` });
       return;
     }
-    
+
     setTempTreeData(updatedTree);
     setHasUnsavedChanges(true);
-    
+
     // Show notification with details
     const addedGames = selectedChesscomGames.size - skippedGames;
-    const msg = skippedGames > 0 
+    const msg = skippedGames > 0
       ? `Added ${addedGames} new games with ${totalNewMoves} moves (${skippedGames} games already existed). Click Save to make permanent.`
       : `Added ${addedGames} games with ${totalNewMoves} total moves. Click Save to make permanent.`;
     setChesscomImportStatus({ type: 'success', msg });
-    
+
     // Close modal after successful import
     setTimeout(() => {
       setShowChesscomModal(false);
@@ -1106,11 +1110,11 @@ export default function TreeEditor() {
 
     const selectedChaptersData = importedStudyChapters.filter(chapter => selectedChapters.has(chapter.name));
     const currentTree = tempTreeData || treeData || { fen: new Chess().fen(), children: [] };
-    
+
     let updatedTree = JSON.parse(JSON.stringify(currentTree));
     let totalNewMoves = 0;
     let skippedChapters = 0;
-    
+
     // Add each chapter as a separate branch from the root
     for (const chapter of selectedChaptersData) {
       // Extract moves from chapter tree
@@ -1119,10 +1123,10 @@ export default function TreeEditor() {
         skippedChapters++;
         continue;
       }
-      
+
       // Find divergence point and add moves as variation
       const { divergenceIndex } = findDivergencePoint(updatedTree, chapterMoves);
-      
+
       if (divergenceIndex === chapterMoves.length) {
         skippedChapters++;
         continue;
@@ -1136,7 +1140,7 @@ export default function TreeEditor() {
         skippedChapters++;
       }
     }
-    
+
     if (totalNewMoves === 0 && skippedChapters > 0) {
       setStudyImportStatus({ type: 'error', msg: `All selected chapters already exist in your tree! Try selecting different chapters.` });
       return;
@@ -1144,17 +1148,17 @@ export default function TreeEditor() {
       setStudyImportStatus({ type: 'error', msg: `No valid moves found in ${selectedChapters.size} selected chapters.` });
       return;
     }
-    
+
     setTempTreeData(updatedTree);
     setHasUnsavedChanges(true);
-    
+
     // Show notification with details
     const addedChapters = selectedChapters.size - skippedChapters;
-    const msg = skippedChapters > 0 
+    const msg = skippedChapters > 0
       ? `Added ${addedChapters} new chapters with ${totalNewMoves} moves (${skippedChapters} chapters already existed). Click Save to make permanent.`
       : `Added ${addedChapters} chapters with ${totalNewMoves} total moves. Click Save to make permanent.`;
     setStudyImportStatus({ type: 'success', msg });
-    
+
     // Close modal after successful import
     setTimeout(() => {
       setShowChaptersModal(false);
@@ -1186,7 +1190,7 @@ export default function TreeEditor() {
     setTempTreeData(mergedTree);
     setHasUnsavedChanges(true);
     setArchiveImportStatus({ type: 'success', msg: `Added ${archiveTree.children.length} game variations. Click Save to make permanent.` });
-    
+
     // Close modal and reset state
     setShowImportModal(false);
     setFetchedGames([]);
@@ -1214,20 +1218,20 @@ export default function TreeEditor() {
   const isWhiteTurn = gameRef.current.turn() === 'w';
   const perspScore = isWhiteTurn ? evalNum : -evalNum;
   const whitePercent = 50 + 50 * (2 / Math.PI) * Math.atan(perspScore / 4);
-  
+
   // Combine pink engine arrows with white child move arrows with unique keys
   const engineArrows = uciToArrow(bestMove) ? [{ ...uciToArrow(bestMove)!, key: `engine-${bestMove}` }] : [];
   const childArrows = treeData ? getChildMoveArrows(treeData, currentFen).map((arrow, index) => ({
     ...arrow,
     key: arrow.id || `child-${arrow.startSquare}-${arrow.endSquare}-${index}`
   })) : [];
-  
+
   // Remove duplicate arrows based on start and end squares to prevent key conflicts
-  const uniqueArrows = [...engineArrows, ...childArrows].filter((arrow, index, self) => 
+  const uniqueArrows = [...engineArrows, ...childArrows].filter((arrow, index, self) =>
     index === self.findIndex(a => a.startSquare === arrow.startSquare && a.endSquare === arrow.endSquare)
   );
   const arrows = uniqueArrows;
-  
+
   const boardOrientation: 'white' | 'black' = treeMeta?.color === 'black' ? 'black' : 'white';
 
   if (loading) return (
@@ -1271,10 +1275,10 @@ export default function TreeEditor() {
                     tooltip={`Current: ${shareAccess === 'read' ? 'Read Only' : 'Edit Access'} - Click to toggle`}
                     onClick={() => setShareAccess(shareAccess === 'read' ? 'edit' : 'read')}
                     className="btn btn-secondary"
-                    style={{ 
-                      padding: '0.5rem', 
-                      display: 'flex', 
-                      alignItems: 'center', 
+                    style={{
+                      padding: '0.5rem',
+                      display: 'flex',
+                      alignItems: 'center',
                       justifyContent: 'center',
                       minWidth: '44px',
                       height: '40px',
@@ -1344,7 +1348,7 @@ export default function TreeEditor() {
                       <button
                         onClick={copyPublicUrl}
                         className="btn btn-secondary"
-                        style={{ 
+                        style={{
                           padding: '0.6rem 0.6rem',
                           fontSize: '0.8rem',
                           display: 'flex',
@@ -1364,7 +1368,7 @@ export default function TreeEditor() {
                     <button
                       onClick={togglePublic}
                       className={`btn ${isPublic ? 'btn-public' : 'btn-secondary'}`}
-                      style={{ 
+                      style={{
                         padding: '0.4rem 0.8rem',
                         fontSize: '0.8rem',
                         display: 'flex',
@@ -1379,8 +1383,8 @@ export default function TreeEditor() {
                   </div>
                 </div>
                 <p className="text-muted text-sm" style={{ margin: 0 }}>
-                  {isPublic 
-                    ? 'Anyone can view this tree with the link. Toggle to make it private.' 
+                  {isPublic
+                    ? 'Anyone can view this tree with the link. Toggle to make it private.'
                     : 'Make this tree accessible to anyone with the link.'}
                 </p>
               </div>
@@ -1395,14 +1399,14 @@ export default function TreeEditor() {
                     {existingShares.length === 0 ? <div className="text-muted text-sm">No shares yet.</div> : existingShares.map(s => (
                       <div key={s.user_id} className="flex items-center justify-between" style={{ padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <div 
-                            style={{ 
-                              padding: '0.25rem', 
+                          <div
+                            style={{
+                              padding: '0.25rem',
                               marginLeft: '0.5rem',
-                              borderRadius: '4px', 
-                              backgroundColor: 'rgba(255,255,255,0.1)', 
-                              display: 'flex', 
-                              alignItems: 'center', 
+                              borderRadius: '4px',
+                              backgroundColor: 'rgba(255,255,255,0.1)',
+                              display: 'flex',
+                              alignItems: 'center',
                               justifyContent: 'center',
                               width: '24px',
                               height: '24px'
@@ -1451,9 +1455,9 @@ export default function TreeEditor() {
               Your tree "{treeMeta?.title}" is now publicly accessible. Share this URL with anyone to let them view your repertoire:
             </p>
 
-            <div style={{ 
-              display: 'flex', 
-              gap: '0.5rem', 
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
               marginBottom: '1.5rem',
               padding: '0.75rem',
               backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1464,7 +1468,7 @@ export default function TreeEditor() {
                 type="text"
                 readOnly
                 value={`${window.location.origin}/#/editor/${id}`}
-                style={{ 
+                style={{
                   flex: 1,
                   background: 'none',
                   border: 'none',
@@ -1476,7 +1480,7 @@ export default function TreeEditor() {
               <button
                 onClick={copyPublicUrl}
                 className="btn btn-secondary"
-                style={{ 
+                style={{
                   padding: '0.5rem 1rem',
                   fontSize: '0.8rem',
                   display: 'flex',
@@ -1555,12 +1559,12 @@ export default function TreeEditor() {
           alignItems: 'center', justifyContent: 'center', padding: '1rem'
         }}>
           <div className="card animate-fade-in" style={{ maxWidth: 600, width: '100%', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }}>
-            <button onClick={() => { 
-              setShowImportModal(false); 
+            <button onClick={() => {
+              setShowImportModal(false);
               setImportPgnText('');
-              setStudyUrl(''); 
-              setStudyImportStatus({ type: '', msg: '' }); 
-              setImportedStudyChapters([]); 
+              setStudyUrl('');
+              setStudyImportStatus({ type: '', msg: '' });
+              setImportedStudyChapters([]);
             }} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
               <X size={24} />
             </button>
@@ -1570,16 +1574,16 @@ export default function TreeEditor() {
             </h2>
 
             {/* Tab Navigation */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '0.5rem', 
+            <div style={{
+              display: 'flex',
+              gap: '0.5rem',
               marginBottom: '1rem',
               borderBottom: '1px solid var(--border-color)'
             }}>
               <button
                 onClick={() => setImportTab('game')}
                 className={`btn ${importTab === 'game' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ 
+                style={{
                   borderBottom: importTab === 'game' ? '2px solid var(--accent-color)' : 'none',
                   borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
                 }}
@@ -1589,7 +1593,7 @@ export default function TreeEditor() {
               <button
                 onClick={() => setImportTab('study')}
                 className={`btn ${importTab === 'study' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ 
+                style={{
                   borderBottom: importTab === 'study' ? '2px solid var(--accent-color)' : 'none',
                   borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
                 }}
@@ -1599,7 +1603,7 @@ export default function TreeEditor() {
               <button
                 onClick={() => setImportTab('archive')}
                 className={`btn ${importTab === 'archive' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ 
+                style={{
                   borderBottom: importTab === 'archive' ? '2px solid var(--accent-color)' : 'none',
                   borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
                 }}
@@ -1658,17 +1662,16 @@ export default function TreeEditor() {
                     borderRadius: 'var(--radius-md)',
                     fontSize: '0.85rem',
                     marginBottom: '1rem',
-                    backgroundColor: studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 
-                                     studyImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
-                                     studyImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                    color: studyImportStatus.type === 'error' ? '#ef4444' : 
-                           studyImportStatus.type === 'success' ? '#22c55e' :
-                           studyImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
-                    border: studyImportStatus.type ? `1px solid ${
-                      studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' : 
+                    backgroundColor: studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                      studyImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
+                        studyImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                    color: studyImportStatus.type === 'error' ? '#ef4444' :
+                      studyImportStatus.type === 'success' ? '#22c55e' :
+                        studyImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
+                    border: studyImportStatus.type ? `1px solid ${studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' :
                       studyImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.2)' :
-                      'rgba(59, 130, 246, 0.2)'
-                    }` : 'none'
+                        'rgba(59, 130, 246, 0.2)'
+                      }` : 'none'
                   }}>
                     {studyImportStatus.msg}
                   </div>
@@ -1679,9 +1682,9 @@ export default function TreeEditor() {
                     <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>Imported Chapters:</h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
                       {importedStudyChapters.map((chapter, index) => (
-                        <div key={index} style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
+                        <div key={index} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '0.5rem',
                           backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1752,7 +1755,7 @@ export default function TreeEditor() {
                       <option value="black">Black Games Only</option>
                     </select>
                   </div>
-                  
+
                   <div style={{ flex: 1 }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                       Max Moves per Game
@@ -1776,17 +1779,16 @@ export default function TreeEditor() {
                     borderRadius: 'var(--radius-md)',
                     fontSize: '0.85rem',
                     marginBottom: '1rem',
-                    backgroundColor: archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 
-                                     archiveImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
-                                     archiveImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                    color: archiveImportStatus.type === 'error' ? '#ef4444' : 
-                           archiveImportStatus.type === 'success' ? '#22c55e' :
-                           archiveImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
-                    border: archiveImportStatus.type ? `1px solid ${
-                      archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' : 
+                    backgroundColor: archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                      archiveImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
+                        archiveImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                    color: archiveImportStatus.type === 'error' ? '#ef4444' :
+                      archiveImportStatus.type === 'success' ? '#22c55e' :
+                        archiveImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
+                    border: archiveImportStatus.type ? `1px solid ${archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' :
                       archiveImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.2)' :
-                      'rgba(59, 130, 246, 0.2)'
-                    }` : 'none'
+                        'rgba(59, 130, 246, 0.2)'
+                      }` : 'none'
                   }}>
                     {archiveImportStatus.msg}
                   </div>
@@ -1800,9 +1802,9 @@ export default function TreeEditor() {
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
                       {fetchedGames.map((game: ArchivedGame) => (
-                        <div key={game.id} style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
+                        <div key={game.id} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '0.5rem',
                           backgroundColor: 'rgba(255,255,255,0.05)',
@@ -1818,9 +1820,9 @@ export default function TreeEditor() {
                               {game.result} • {game.color} • {game.date ? new Date(game.date).toLocaleDateString() : 'Unknown date'}
                             </div>
                           </div>
-                          <span style={{ 
-                            padding: '0.25rem 0.5rem', 
-                            backgroundColor: 'var(--accent-color)', 
+                          <span style={{
+                            padding: '0.25rem 0.5rem',
+                            backgroundColor: 'var(--accent-color)',
                             color: '#fff',
                             borderRadius: 'var(--radius-sm)',
                             fontSize: '0.7rem'
@@ -1843,7 +1845,7 @@ export default function TreeEditor() {
                   >
                     {isFetchingArchive ? 'Fetching...' : 'Fetch Games'}
                   </button>
-                  
+
                   {fetchedGames.length > 0 && (
                     <button
                       onClick={handleProcessSelectedGames}
@@ -1859,12 +1861,12 @@ export default function TreeEditor() {
 
             {/* Common Cancel Button */}
             <button
-              onClick={() => { 
-                setShowImportModal(false); 
+              onClick={() => {
+                setShowImportModal(false);
                 setImportPgnText('');
-                setStudyUrl(''); 
-                setStudyImportStatus({ type: '', msg: '' }); 
-                setImportedStudyChapters([]); 
+                setStudyUrl('');
+                setStudyImportStatus({ type: '', msg: '' });
+                setImportedStudyChapters([]);
                 // Reset archive state
                 setArchiveUsername('');
                 setFetchedGames([]);
@@ -1881,10 +1883,10 @@ export default function TreeEditor() {
 
       {/* Header - Collapsible on mobile */}
       {!isMobile || !headerCollapsed ? (
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           gap: '0.5rem',
           padding: isMobile ? '0.5rem 1rem' : undefined,
           backgroundColor: isMobile ? 'var(--panel-bg)' : undefined,
@@ -1904,7 +1906,7 @@ export default function TreeEditor() {
             {isMobile && !viewOnly && (
               <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={() => { handleSave(); }} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
             )}
-            
+
             {/* Mobile: show expanded buttons when menu open, then hamburger */}
             {isMobile && (
               <>
@@ -1921,7 +1923,7 @@ export default function TreeEditor() {
                 </button>
               </>
             )}
-            
+
             {/* Desktop: always show all buttons */}
             {!isMobile && (
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
@@ -1942,16 +1944,16 @@ export default function TreeEditor() {
         </div>
       ) : (
         /* Mobile: Collapsed header - show toggle button */
-        <div style={{ 
-          position: 'sticky', 
-          top: 0, 
-          zIndex: 10, 
+        <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
           padding: '0.5rem 1rem',
           backgroundColor: 'var(--panel-bg)',
           borderBottom: '1px solid var(--border-color)'
         }}>
-          <button 
-            onClick={() => setHeaderCollapsed(false)} 
+          <button
+            onClick={() => setHeaderCollapsed(false)}
             className="btn btn-secondary btn-icon"
             style={{ fontSize: '12px', fontWeight: 'bold' }}
           >
@@ -2003,7 +2005,7 @@ export default function TreeEditor() {
 
       {/* Editor Body */}
       <div className="editor-layout">
-        <div className="chess-pane-new" style={{padding: `${isMobile ? '0.25rem' : '1rem'}`}}>
+        <div className="chess-pane-new" style={{ padding: `${isMobile ? '0.25rem' : '1rem'}` }}>
           <div className="chess-board-container">
             {/* Eval Bar Container */}
             <div
@@ -2011,13 +2013,13 @@ export default function TreeEditor() {
               onMouseLeave={() => setMousePos(prev => ({ ...prev, active: false }))}
               className="eval-bar-wrapper"
               data-tooltip="Engine Evaluation"
-              style={{width: `${isMobile ? '98%' : '2%'}`, marginBottom: `${isMobile ? '.5rem' : '0rem'}`, marginLeft: `${isMobile ? '.25rem' : '0'}`}}
+              style={{ width: `${isMobile ? '98%' : '2%'}`, marginBottom: `${isMobile ? '.5rem' : '0rem'}`, marginLeft: `${isMobile ? '.25rem' : '0'}` }}
             >
-              <div 
+              <div
                 className="eval-bar-bg"
                 style={{
                   display: 'flex',
-                  flexDirection: window.innerWidth > 768 
+                  flexDirection: window.innerWidth > 768
                     ? (treeMeta?.color === 'black' ? 'column' : 'column-reverse')
                     : (treeMeta?.color === 'black' ? 'row' : 'row-reverse'),
                   justifyContent: 'flex-start'
@@ -2084,7 +2086,7 @@ export default function TreeEditor() {
         </div>
 
         {/* Tree pane - with mobile size limits and fullscreen support */}
-        <div 
+        <div
           className={`tree-pane-new ${treeFullscreen ? 'tree-pane-fullscreen' : ''}`}
           style={{
             flex: treeFullscreen ? '1' : undefined,
@@ -2101,8 +2103,8 @@ export default function TreeEditor() {
           }}
         >
           {treeData && (
-            <div style={{ 
-              width: '100%', 
+            <div style={{
+              width: '100%',
               height: '100%',
               position: 'relative',
               // Add exit button for fullscreen mode
@@ -2150,11 +2152,11 @@ export default function TreeEditor() {
           backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
           alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem'
         }}>
-          <div className="card animate-fade-in" style={{ 
-            maxWidth: 700, 
-            width: '100%', 
-            position: 'relative', 
-            maxHeight: isMobile ? '90vh' : '80vh', 
+          <div className="card animate-fade-in" style={{
+            maxWidth: 700,
+            width: '100%',
+            position: 'relative',
+            maxHeight: isMobile ? '90vh' : '80vh',
             overflowY: 'auto',
             margin: isMobile ? '0' : undefined
           }}>
@@ -2205,7 +2207,7 @@ export default function TreeEditor() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
-                    Imported ({cachedStudies.length + cachedChesscomEntries.length}) 
+                    Imported ({cachedStudies.length + cachedChesscomEntries.length})
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
                       ({cachedStudies.length} studies, {cachedChesscomEntries.length} chess.com)
                     </span>
@@ -2258,7 +2260,7 @@ export default function TreeEditor() {
                           <div>
                             <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>{study.name}</h4>
                             <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              {study.chapters.length} chapters 
+                              {study.chapters.length} chapters
                               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>• Lichess</span>
                             </p>
                             <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
@@ -2282,7 +2284,7 @@ export default function TreeEditor() {
                         </div>
                       </div>
                     ))}
-                    
+
                     {/* Render Chess.com entries */}
                     {cachedChesscomEntries.map((entry) => (
                       <div
@@ -2311,7 +2313,7 @@ export default function TreeEditor() {
                               {entry.username} - {new Date(entry.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                             </h4>
                             <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              {entry.games.length} games 
+                              {entry.games.length} games
                               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>• Chess.com</span>
                             </p>
                             <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
@@ -2370,12 +2372,12 @@ export default function TreeEditor() {
               {studyImportStatus.msg && (
                 <div style={{
                   borderRadius: 'var(--radius-md)',
-                  backgroundColor: studyImportStatus.type === 'error' ? 'var(--error-bg)' : 
-                                   studyImportStatus.type === 'success' ? 'var(--success-bg)' : 
-                                   'var(--info-bg)',
-                  color: studyImportStatus.type === 'error' ? 'var(--error-text)' : 
-                         studyImportStatus.type === 'success' ? 'var(--success-text)' : 
-                         'var(--info-text)',
+                  backgroundColor: studyImportStatus.type === 'error' ? 'var(--error-bg)' :
+                    studyImportStatus.type === 'success' ? 'var(--success-bg)' :
+                      'var(--info-bg)',
+                  color: studyImportStatus.type === 'error' ? 'var(--error-text)' :
+                    studyImportStatus.type === 'success' ? 'var(--success-text)' :
+                      'var(--info-text)',
                   fontSize: '0.9rem',
                 }}>
                   {studyImportStatus.msg}
@@ -2405,7 +2407,7 @@ export default function TreeEditor() {
                         }
                       }}
                       className="btn btn-secondary"
-                      style={{ 
+                      style={{
                         fontSize: '0.8rem',
                         padding: '0.5rem',
                         minWidth: '36px',
@@ -2428,7 +2430,7 @@ export default function TreeEditor() {
                       )}
                     </button>
                   </div>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
                     {importedStudyChapters.map((chapter, index) => (
                       <div
@@ -2480,7 +2482,7 @@ export default function TreeEditor() {
                       </div>
                     ))}
                   </div>
-                  
+
                   {/* Import button below Chapters section */}
                   <div style={{ marginTop: '1rem' }}>
                     {importedStudyChapters.length > 0 && (
@@ -2514,11 +2516,11 @@ export default function TreeEditor() {
           backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
           alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem'
         }}>
-          <div className="card animate-fade-in" style={{ 
-            maxWidth: 700, 
-            width: '100%', 
-            position: 'relative', 
-            maxHeight: isMobile ? '90vh' : '80vh', 
+          <div className="card animate-fade-in" style={{
+            maxWidth: 700,
+            width: '100%',
+            position: 'relative',
+            maxHeight: isMobile ? '90vh' : '80vh',
             overflowY: 'auto',
             margin: isMobile ? '0' : undefined
           }}>
@@ -2548,21 +2550,21 @@ export default function TreeEditor() {
                       }
                     }}
                   />
-                  
+
                   {/* Month Selector on the right */}
-                    <MonthPicker
-                      value={selectedMonth}
-                      onChange={setSelectedMonth}
-                      placeholder="Choose a month..."
-                      disabled={isFetchingChesscomGames}
-                    />
+                  <MonthPicker
+                    value={selectedMonth}
+                    onChange={setSelectedMonth}
+                    placeholder="Choose a month..."
+                    disabled={isFetchingChesscomGames}
+                  />
                 </div>
-                
+
                 {/* Selected month/year display - always show when month is selected */}
                 {selectedMonth && (
-                  <div style={{ 
-                    fontSize: '0.75rem', 
-                    color: 'var(--text-muted)', 
+                  <div style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
                     marginTop: '0.25rem',
                     fontStyle: 'italic'
                   }}>
@@ -2573,7 +2575,7 @@ export default function TreeEditor() {
                     })()}
                   </div>
                 )}
-                
+
                 {/* Fetch/Import Button below everything */}
                 <div style={{ marginTop: '0.75rem' }}>
                   <button
@@ -2591,12 +2593,12 @@ export default function TreeEditor() {
               {chesscomImportStatus.msg && (
                 <div style={{
                   borderRadius: 'var(--radius-md)',
-                  backgroundColor: chesscomImportStatus.type === 'error' ? 'var(--error-bg)' : 
-                                   chesscomImportStatus.type === 'success' ? 'var(--success-bg)' : 
-                                   'var(--info-bg)',
-                  color: chesscomImportStatus.type === 'error' ? 'var(--error-text)' : 
-                         chesscomImportStatus.type === 'success' ? 'var(--success-text)' : 
-                         'var(--info-text)',
+                  backgroundColor: chesscomImportStatus.type === 'error' ? 'var(--error-bg)' :
+                    chesscomImportStatus.type === 'success' ? 'var(--success-bg)' :
+                      'var(--info-bg)',
+                  color: chesscomImportStatus.type === 'error' ? 'var(--error-text)' :
+                    chesscomImportStatus.type === 'success' ? 'var(--success-text)' :
+                      'var(--info-text)',
                   fontSize: '0.9rem',
                 }}>
                   {chesscomImportStatus.msg}
@@ -2627,7 +2629,7 @@ export default function TreeEditor() {
                         }
                       }}
                       className="btn btn-secondary"
-                      style={{ 
+                      style={{
                         fontSize: '0.8rem',
                         padding: '0.5rem',
                         minWidth: '36px',
@@ -2650,7 +2652,7 @@ export default function TreeEditor() {
                       )}
                     </button>
                   </div>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
                     {chesscomGames.map((game) => (
                       <div
@@ -2683,8 +2685,8 @@ export default function TreeEditor() {
                               <span style={{ fontWeight: 'bold' }}>
                                 {game.white.username} ({game.white.rating}) vs {game.black.username} ({game.black.rating})
                               </span>
-                              <span style={{ 
-                                fontSize: '0.8rem', 
+                              <span style={{
+                                fontSize: '0.8rem',
                                 color: 'var(--text-muted)',
                                 padding: '0.125rem 0.5rem',
                                 backgroundColor: 'var(--border-color)',
@@ -2716,7 +2718,7 @@ export default function TreeEditor() {
                       </div>
                     ))}
                   </div>
-                  
+
                   {/* Import button below Games section */}
                   <div style={{ marginTop: '1rem' }}>
                     {chesscomGames.length > 0 && (

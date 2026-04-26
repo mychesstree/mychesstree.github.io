@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TooltipProvider } from './components/TooltipContext';
 import { ToastProvider } from './components/Toast';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { WifiOff } from 'lucide-react';
+import { WifiOff, X } from 'lucide-react';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Landing from './pages/Landing';
@@ -14,46 +14,55 @@ import Settings from './pages/Settings';
 import Pricing from './pages/Pricing';
 import UpdatePassword from './pages/UpdatePassword';
 import TreeNotFound from './pages/TreeNotFound';
+import { useState } from 'react';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isGuest, loading } = useAuth();
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading…</div>;
   if (!user && !isGuest) return <Navigate to="/login" replace />;
-
   return <>{children}</>;
 };
 
 // Global offline indicator component
 function GlobalOfflineIndicator() {
   const isOnline = useOnlineStatus();
+  const [showOffline, setshowOffline] = useState(true);
+
 
   if (isOnline) return null;
 
+  return (<div>
 
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 20,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 9999,
-      backgroundColor: 'rgba(239, 68, 68, 0.95)',
-      color: 'white',
-      padding: '0.75rem 1.5rem',
-      borderRadius: '2rem',
-      fontSize: '0.9rem',
-      fontWeight: 600,
-      display: 'flex',
-      alignItems: 'center',
-      gap: '0.5rem',
-      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
-      animation: 'slideDown 0.3s ease-out'
-    }}>
-      <WifiOff size={18} />
-      <span> Offline</span>
-    </div>
+    {showOffline && (
+
+      <button style={{
+        position: 'fixed',
+        top: 20,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 9999,
+        backgroundColor: 'rgba(239, 68, 68, 0.95)',
+        color: 'white',
+        padding: '0.75rem 1rem',
+        borderRadius: '2rem',
+        border: 'none',
+        fontSize: '0.9rem',
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.25rem',
+        boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
+        animation: 'slideDown 0.3s ease-out',
+      }} onClick={() => setshowOffline(false)}>
+        <WifiOff size={18} />
+        <span> Offline</span>
+        &nbsp;
+        <X size={16} />
+      </button>)}
+  </div>
   );
+
 }
 
 function App() {
