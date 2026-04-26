@@ -63,15 +63,15 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         .select('date')
         .order('date', { ascending: true })
         .limit(1);
-      
+
       const { data: maxData, error: maxError } = await supabase
         .from('daily_master_games')
         .select('date')
         .order('date', { ascending: false })
         .limit(1);
-        
+
       if (error || maxError) throw error || maxError;
-      
+
       if (data?.[0] && maxData?.[0]) {
         setDateRangeState({
           earliest: new Date(data[0].date),
@@ -91,13 +91,13 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         .from('daily_master_games')
         .select('date')
         .limit(1);
-        
+
       if (testError) {
         console.error('Table access error:', testError);
         setError('Daily games table not available');
         return;
       }
-      
+
       // Get game directly from table by date
       const targetDate = selectedDate.toISOString().split('T')[0];
       const { data, error } = await supabase
@@ -105,7 +105,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         .select('*')
         .eq('date', targetDate)
         .maybeSingle();
-        
+
       if (error) {
         console.error('Database error:', error);
         setError('No game available for this date');
@@ -144,7 +144,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
             animation: 'spin 1s linear infinite',
             margin: '0 auto 1rem auto'
           }} />
-          <p className="text-muted">Loading today's master game...</p>
+          <p className="text-muted">Loading today's game...</p>
         </div>
       </div>
     );
@@ -152,10 +152,22 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
 
   if (error || !dailyGame) {
     return (
-      <div className="card" style={{ padding: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Trophy size={20} color="var(--accent-color)" />
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Daily Master Game</h3>
+      <div className="card" style={{ padding: '1rem', position: 'relative' }}>
+        <div style={{
+          position: 'absolute',
+          top: -7,
+          right: -17,
+          backgroundColor: 'rgba(119, 19, 19, 0.78)',
+          borderRadius: '0.5rem',
+          padding: '0.4rem',
+          paddingLeft: '0.8rem',
+          paddingRight: '0.8rem',
+          transform: 'translate(-10px,-10px)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+            <Trophy size={14} color="var(--accent-color)" />
+            <h3 style={{ margin: 0, fontSize: '0.8rem' }}>Daily Game</h3>
+          </div>
         </div>
         <div style={{ textAlign: 'center', padding: '1rem 0' }}>
           <p className="text-muted">{error || 'No game available'}</p>
@@ -168,10 +180,10 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
   }
 
   return (
-    <div 
-      className="card" 
-      style={{ 
-        padding: '1rem', 
+    <div
+      className="card"
+      style={{
+        padding: '1rem',
         maxWidth: '350px',
         cursor: 'pointer',
         transition: 'transform 0.2s ease, box-shadow 0.2s ease',
@@ -196,10 +208,10 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         </div>
         <div
           className="btn"
-          style={{ 
-            padding: '0.4rem', 
-            display: 'flex', 
-            alignItems: 'center', 
+          style={{
+            padding: '0.4rem',
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
             pointerEvents: 'none'
           }}
@@ -222,7 +234,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
                 }
               }}
               className="btn btn-secondary"
-              style={{ 
+              style={{
                 padding: '0.25rem 0.5rem',
                 display: 'flex',
                 alignItems: 'center',
@@ -232,19 +244,19 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
             >
               <ChevronLeft size={14} />
             </button>
-            
-            <div style={{ 
-              fontSize: '0.85rem', 
-              color: 'var(--text-muted)', 
+
+            <div style={{
+              fontSize: '0.85rem',
+              color: 'var(--text-muted)',
               textAlign: 'center',
               minWidth: '120px'
             }}>
-              {selectedDate.toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric' 
+              {selectedDate.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
               })}
             </div>
-            
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -255,7 +267,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
                 }
               }}
               className="btn btn-secondary"
-              style={{ 
+              style={{
                 padding: '0.25rem 0.5rem',
                 display: 'flex',
                 alignItems: 'center',
@@ -266,7 +278,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
               <ChevronRight size={14} />
             </button>
           </div>
-          
+
           {selectedDate.toDateString() !== new Date().toDateString() && (
             <div style={{ textAlign: 'center' }}>
               <button
@@ -275,7 +287,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
                   onDateChange(new Date());
                 }}
                 className="btn btn-secondary"
-                style={{ 
+                style={{
                   fontSize: '0.7rem',
                   padding: '0.2rem 0.4rem',
                   display: 'inline-flex',
@@ -307,7 +319,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
           })()}
         </div>
       </div>
-      
+
       {/* Completion Overlay */}
       {isCompleted && (
         <div style={{

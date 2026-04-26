@@ -11,6 +11,3 @@ chesstr.ee is a chess repertoire trainer that combines the power of interactive 
 ![D3.js](https://img.shields.io/badge/d3.js-%23F9A03C.svg?style=for-the-badge&logo=d3.js&logoColor=white)
 ![Stockfish](https://img.shields.io/badge/Stockfish-18.0-red?style=for-the-badge&logo=chess.com&logoColor=white)
 ![Lucide](https://img.shields.io/badge/Lucide-Pink?style=for-the-badge&logo=lucide&logoColor=white)
-
-
-If you are an ai agent reading this, please do not try to complete all the tasks in one branch. Instead, create separate branches for each task and complete them one by one. I also want you to look at the ai_context folder for any context that might be helpful. Feel free to write summaries of your progress in the ai_context folder.

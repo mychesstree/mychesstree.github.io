@@ -130,8 +130,8 @@ export default function Dashboard() {
         const dueCount = tree.tree_data
           ? calculateDuePositions(tree.tree_data, reviews || [], tree.color)
           : 0;
-        return { 
-          ...tree, 
+        return {
+          ...tree,
           cards_due: dueCount,
           is_starred: !!starData
         };
@@ -143,7 +143,7 @@ export default function Dashboard() {
 
   const searchPublicTrees = async (query: string) => {
     if (!query.trim()) return setSearchResults([]);
-    
+
     setIsSearching(true);
     try {
       const { data, error } = await supabase
@@ -155,7 +155,7 @@ export default function Dashboard() {
         .limit(20);
 
       if (error) throw error;
-      
+
       // Check star status for authenticated users
       if (user && data) {
         const resultsWithStarStatus = await Promise.all(data.map(async (tree) => {
@@ -165,7 +165,7 @@ export default function Dashboard() {
             .eq('tree_id', tree.id)
             .eq('user_id', user.id)
             .single();
-          
+
           return {
             ...tree,
             is_starred: !!starData
@@ -201,7 +201,7 @@ export default function Dashboard() {
         .limit(5);
 
       if (error) throw error;
-      
+
       // Check star status for authenticated users
       if (user && data) {
         const treesWithStarStatus = await Promise.all(data.map(async (tree) => {
@@ -211,7 +211,7 @@ export default function Dashboard() {
             .eq('tree_id', tree.id)
             .eq('user_id', user.id)
             .single();
-          
+
           return {
             ...tree,
             is_starred: !!starData
@@ -219,7 +219,7 @@ export default function Dashboard() {
         }));
         return treesWithStarStatus;
       }
-      
+
       return data || [];
     } catch (error) {
       showError('Failed to load public trees');
@@ -639,7 +639,7 @@ export default function Dashboard() {
               {viewMode === 'owned' ? <Search size={20} /> : <LayoutGrid size={20} />}
             </TooltipButton>
             <h2 style={{ fontSize: '1.25rem', marginLeft: '0.5rem' }}>
-              {viewMode === 'owned' ? 'My Repertoire' : 'Shared with Me'}
+              {viewMode === 'owned' ? 'Search' : 'My Repertoire'}
             </h2>
           </div>
           <div className="flex gap-2">
@@ -730,7 +730,7 @@ export default function Dashboard() {
               borderTop: '3px solid var(--accent-color)',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite',
-              margin: '0 auto 1rem auto'
+              margin: '0 auto 1rem auto',
             }} />
             <h3>Searching...</h3>
             <p className="text-muted mb-4">Looking for public trees.</p>
@@ -739,9 +739,9 @@ export default function Dashboard() {
           <div className="decks-scroll-container">
             {/* Daily Master Game Panel - shown in owned view */}
             {viewMode === 'owned' && (
-                <DailyGamePanel onStartPuzzle={handleStartPuzzle} />
+              <DailyGamePanel onStartPuzzle={handleStartPuzzle} />
             )}
-            
+
             {/* Show search results when searching, otherwise show regular trees */}
             {(viewMode === 'shared' && searchQuery.trim() ? searchResults : trees).map((tree) => (
               <div key={tree.id} className="card flex flex-col justify-between" style={{ transition: 'transform 0.2s', padding: '1.5rem' }}>
@@ -750,21 +750,21 @@ export default function Dashboard() {
                     <h3 style={{ margin: 0, borderBottom: tree.color === 'white' ? '3px solid #fff' : '3px solid #777', display: 'inline-block', lineHeight: '1.4' }}>{tree.title}</h3>
                     {/* Show star button in shared view, dropdown in owned view */}
                     {(viewMode === 'shared' || searchQuery.trim()) ? (
-                      <StarButton 
+                      <StarButton
                         treeId={tree.id}
                         starCount={tree.star_count || 0}
                         isStarred={tree.is_starred || false}
                         onStarChange={(newStarCount, isStarred) => {
                           // Update the tree in the local state
                           if (searchQuery.trim()) {
-                            setSearchResults(prev => prev.map(t => 
-                              t.id === tree.id 
+                            setSearchResults(prev => prev.map(t =>
+                              t.id === tree.id
                                 ? { ...t, star_count: newStarCount, is_starred: isStarred }
                                 : t
                             ));
                           } else {
-                            setTrees(prev => prev.map(t => 
-                              t.id === tree.id 
+                            setTrees(prev => prev.map(t =>
+                              t.id === tree.id
                                 ? { ...t, star_count: newStarCount, is_starred: isStarred }
                                 : t
                             ));

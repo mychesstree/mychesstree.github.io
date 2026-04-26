@@ -40,6 +40,7 @@ interface Tree {
   stars: number;
   node_count: number;
   user_id: string;
+  tree_data?: any;
 }
 
 interface PuzzleInterfaceProps {
@@ -172,23 +173,38 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   }, [dateRange]);
 
   const fetchUserProgress = async () => {
-    if (!user || !game) return;
+    if (!game) return;
 
+    let completed = new Set<number>();
+    
+    // Check local storage first
     try {
-      const { data, error } = await supabase
-        .from('user_puzzle_attempts')
-        .select('position_index, is_correct')
-        .eq('user_id', user.id)
-        .eq('game_id', game.id)
-        .eq('is_correct', true);
+      const localProgress = localStorage.getItem(`chesstr.ee_daily_progress_${game.id}`);
+      if (localProgress) {
+        completed = new Set(JSON.parse(localProgress));
+      }
+    } catch (e) {}
 
-      if (error) throw error;
+    if (user) {
+      try {
+        const { data, error } = await supabase
+          .from('user_puzzle_attempts')
+          .select('position_index, is_correct')
+          .eq('user_id', user.id)
+          .eq('game_id', game.id)
+          .eq('is_correct', true);
 
-      const completed = new Set(data?.map(attempt => attempt.position_index) || []);
-      setCompletedPositions(completed);
-    } catch (err) {
-      console.error('Failed to fetch user progress:', err);
+        if (!error && data) {
+          data.forEach(attempt => completed.add(attempt.position_index));
+          // Sync merged data back to local storage
+          localStorage.setItem(`chesstr.ee_daily_progress_${game.id}`, JSON.stringify(Array.from(completed)));
+        }
+      } catch (err) {
+        console.error('Failed to fetch user progress:', err);
+      }
     }
+    
+    setCompletedPositions(completed);
   };
 
   const fetchDateRange = async () => {
@@ -296,7 +312,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
           color: newColor,
           user_id: user!.id,
           is_public: false,
-          data: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', children: [] },
+          tree_data: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', children: [] },
           stars: 0,
           node_count: 1
         })
@@ -351,9 +367,9 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     setIsIntegrating(true);
     try {
       // Get the current tree data
-      const { data: treeData, error: fetchError } = await supabase
+      const { data: treeDataRes, error: fetchError } = await supabase
         .from('trees')
-        .select('data')
+        .select('tree_data')
         .eq('id', selectedTree.id)
         .single();
 
@@ -382,13 +398,13 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       }
 
       // Add moves to tree as variation
-      const updatedTree = addMovesAsVariation(treeData.data, puzzleMoves);
+      const updatedTree = addMovesAsVariation(treeDataRes.tree_data, puzzleMoves);
 
       // Save updated tree
       const { error: saveError } = await supabase
         .from('trees')
         .update({
-          data: updatedTree,
+          tree_data: updatedTree,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedTree.id);
@@ -430,7 +446,12 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
         setShowResult(true);
         showSuccess('Correct');
         // Add to completed positions
-        setCompletedPositions(prev => new Set([...prev, positionIndex]));
+        setCompletedPositions(prev => {
+          const newCompleted = new Set([...prev, positionIndex]);
+          const localProgressKey = `chesstr.ee_daily_progress_${game.id}`;
+          localStorage.setItem(localProgressKey, JSON.stringify(Array.from(newCompleted)));
+          return newCompleted;
+        });
       } else {
         // Increment retry count
         const currentRetries = retryCount[positionIndex] || 0;
@@ -932,12 +953,32 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                           borderRadius: '8px',
                           cursor: 'pointer',
                           backgroundColor: selectedTree?.id === tree.id ? 'var(--accent-color)' : 'transparent',
-                          color: selectedTree?.id === tree.id ? 'white' : 'inherit'
+                          color: selectedTree?.id === tree.id ? 'white' : 'inherit',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '1rem'
                         }}
                       >
-                        <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>{tree.title}</div>
-                        <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
-                          {tree.node_count} nodes • {tree.color === 'white' ? 'White' : 'Black'} perspective
+                        <div style={{ width: '48px', height: '48px', flexShrink: 0, pointerEvents: 'none' }}>
+                          {(() => {
+                            const Board = Chessboard as any;
+                            return <Board
+                              options={{
+                                position: tree.tree_data?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                                boardOrientation: tree.color === 'black' ? 'black' : 'white',
+                                pieces: calientePieces,
+                                darkSquareStyle: boardStyles.darkSquareStyle,
+                                lightSquareStyle: boardStyles.lightSquareStyle,
+                                showNotation: false
+                              }}
+                            />;
+                          })()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>{tree.title}</div>
+                          <div style={{ fontSize: '0.85rem', opacity: selectedTree?.id === tree.id ? 1 : 0.8 }}>
+                            {tree.node_count} nodes • {tree.color === 'white' ? 'White' : 'Black'} perspective
+                          </div>
                         </div>
                       </div>
                     ))}

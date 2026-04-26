@@ -735,7 +735,7 @@ rect {
 @media (min-width: 768px) {
   .decks-scroll-container {
     flex-wrap: nowrap;
-    overflow-x: auto;
+    /* overflow-x: auto; */
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
     /* Hide for clean look */
@@ -777,6 +777,7 @@ rect {
 
 /* Disable tooltips on mobile devices */
 @media (max-width: 767px) {
+
   [data-tooltip]:hover::after,
   [data-tooltip]:hover:before {
     display: none !important;
@@ -1672,26 +1673,26 @@ rect {
     flex-direction: column;
     align-items: center;
   }
-  
+
   .examples-grid {
     grid-template-columns: 1fr;
     gap: 1.5rem;
   }
-  
+
   .example-card {
     padding: 1.5rem;
   }
-  
+
   .game-info {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-  
+
   .tree-stats {
     justify-content: space-around;
   }
-  
+
   .testimonial-footer {
     flex-direction: column;
     align-items: flex-start;

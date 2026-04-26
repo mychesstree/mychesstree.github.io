@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase';
 import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown, HelpCircle, CreditCard, WifiOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useDropdown } from '../hooks/useDropdown';
-import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import TutorialModal from './TutorialModal';
 
 export default function Layout() {
@@ -13,8 +12,7 @@ export default function Layout() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const location = useLocation();
-  const isOnline = useOnlineStatus();
-  
+
   // Hide nav bar for tree editor and review pages
   const shouldHideNav = location.pathname.startsWith('/editor/') || location.pathname.startsWith('/review/');
 
@@ -49,39 +47,20 @@ export default function Layout() {
   return (
     <div className="app-layout">
       {!shouldHideNav && (
-        <header className="app-header" style={{ 
+        <header className="app-header" style={{
           transform: headerCollapsed ? 'translateY(-100%)' : 'translateY(0)',
           transition: 'transform 0.3s ease-in-out',
           padding: '0.75rem 1rem'
         }}>
-        {/* Brand */}
-        <Link to="/" className="app-header-brand" style={{ gap: '0.25rem' }}>
-          <img src="/logo.svg" alt="chesstr.ee Logo" style={{ height: 32, width: 'auto' }} />
-          <span className="brand-wordmark">
-            chesstr<span className="brand-suffix">.ee</span>
-          </span>
-        </Link>
+          {/* Brand */}
+          <Link to="/" className="app-header-brand" style={{ gap: '0.25rem' }}>
+            <img src="/logo.svg" alt="chesstr.ee Logo" style={{ height: 32, width: 'auto' }} />
+            <span className="brand-wordmark">
+              chesstr<span className="brand-suffix">.ee</span>
+            </span>
+          </Link>
 
-        {/* Offline Indicator */}
-        {!isOnline && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.5rem 0.75rem',
-            backgroundColor: 'rgba(239, 68, 68, 0.9)',
-            color: 'white',
-            borderRadius: '2rem',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)'
-          }}>
-            <WifiOff size={14} />
-            <span>Offline</span>
-          </div>
-        )}
-
-        {/* Profile button + dropdown */}
+          {/* Profile button + dropdown */}
           <div ref={wrapperRef} style={{ position: 'relative' }}>
             <button
               onClick={toggleDropdown}

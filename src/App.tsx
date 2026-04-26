@@ -27,9 +27,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Global offline indicator component
 function GlobalOfflineIndicator() {
   const isOnline = useOnlineStatus();
-  
+
   if (isOnline) return null;
-  
+
+
   return (
     <div style={{
       position: 'fixed',
@@ -49,8 +50,8 @@ function GlobalOfflineIndicator() {
       boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)',
       animation: 'slideDown 0.3s ease-out'
     }}>
-      <WifiOff size={16} />
-      <span>You're offline - some features may be limited</span>
+      <WifiOff size={18} />
+      <span> Offline</span>
     </div>
   );
 }
