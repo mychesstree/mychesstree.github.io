@@ -859,6 +859,11 @@ export default function TreeEditor() {
     setHasPending(true);
   }, [treeData, addToHistory]);
 
+  const runMobileMenuAction = useCallback((action: () => void) => {
+    action();
+    setShowMenu(false);
+  }, []);
+
   const handleDiscardTemporaryChanges = useCallback(() => {
     setTempTreeData(null);
     setHasUnsavedChanges(false);
@@ -1905,10 +1910,10 @@ export default function TreeEditor() {
               <>
                 {showMenu && (
                   <>
-                    <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => { setDeleteMode(!isDeleteMode); setShowMenu(false); }} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
-                    <TooltipButton tooltip="Share Repertoire" onClick={() => { setShowShareModal(true); setShowMenu(false); }} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
-                    <TooltipButton tooltip="Import" onClick={() => { setShowStudySelector(true); setShowMenu(false); }} className="btn btn-icon btn-secondary" style={{ position: 'relative' }}><Import size={20} /></TooltipButton>
-                    <TooltipButton tooltip="Toggle Fullscreen Tree" onClick={() => { setTreeFullscreen(!treeFullscreen); setShowMenu(false); }} className="btn btn-icon btn-secondary">{treeFullscreen ? <X size={20} /> : <Maximize size={20} />}</TooltipButton>
+                    <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => runMobileMenuAction(() => setDeleteMode(!isDeleteMode))} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
+                    <TooltipButton tooltip="Share Repertoire" onClick={() => runMobileMenuAction(() => setShowShareModal(true))} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                    <TooltipButton tooltip="Import" onClick={() => runMobileMenuAction(() => setShowStudySelector(true))} className="btn btn-icon btn-secondary" style={{ position: 'relative' }}><Import size={20} /></TooltipButton>
+                    <TooltipButton tooltip="Toggle Fullscreen Tree" onClick={() => runMobileMenuAction(() => setTreeFullscreen(!treeFullscreen))} className="btn btn-icon btn-secondary">{treeFullscreen ? <X size={20} /> : <Maximize size={20} />}</TooltipButton>
                   </>
                 )}
                 <button onClick={() => setShowMenu(!showMenu)} className="btn btn-icon btn-secondary" style={showMenu ? { backgroundColor: 'var(--accent-color)' } : undefined}>

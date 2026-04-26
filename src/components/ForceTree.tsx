@@ -128,6 +128,24 @@ function calculateBranchPositions(node: TreeNode, depthMap: Map<string, number>)
   return positions;
 }
 
+function findNodeByFen(node: TreeNode, targetFen: string): TreeNode | null {
+  if (node.fen === targetFen) return node;
+  for (const child of node.children) {
+    const found = findNodeByFen(child, targetFen);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findParentByFen(node: TreeNode, targetFen: string, parent: TreeNode | null = null): TreeNode | null {
+  if (node.fen === targetFen) return parent;
+  for (const child of node.children) {
+    const found = findParentByFen(child, targetFen, node);
+    if (found) return found;
+  }
+  return null;
+}
+
 export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate, isDeleteMode, tempTreeData, isFullscreen }: ForceTreeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -136,141 +154,42 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
   const [nodeTitle, setNodeTitle] = useState('');
   const [nodeDescription, setNodeDescription] = useState('');
   const [navMenuExpanded, setNavMenuExpanded] = useState(false);
+  const currentTree = tempTreeData || data;
   const activePath = useMemo(() => pathToNode(data, currentFen), [data, currentFen]);
+  const currentNode = useMemo(() => findNodeByFen(currentTree, currentFen), [currentTree, currentFen]);
 
-  // Helper function to find path (shared between up/down navigation)
-  const findPath = (node: TreeNode, targetFen: string, path: TreeNode[] = []): TreeNode[] | null => {
-    if (node.fen === targetFen) return [...path, node];
-    for (const child of node.children) {
-      const found = findPath(child, targetFen, [...path, node]);
-      if (found) return found;
-    }
-    return null;
-  };
+  const navigateToNode = useCallback((target?: TreeNode | null) => {
+    if (!target) return;
+    onNodeClick({ fen: target.fen, move: target.move || 'Start' });
+  }, [onNodeClick]);
 
-  // Helper function to find a specific node in the tree
-  const findNode = (node: TreeNode, targetFen: string): TreeNode | null => {
-    if (node.fen === targetFen) return node;
-    for (const child of node.children) {
-      const found = findNode(child, targetFen);
-      if (found) return found;
-    }
-    return null;
-  };
-
-  // TODO: Navigation functions can be more condense and reuse logic better lets reduce lines of code on this along with other tree traversal logic 
-  // Navigation functions
   const navigateLeft = useCallback(() => {
-    // Use tempTreeData if available, otherwise use main data
-    const currentTree = tempTreeData || data;
-    
-    // Find parent of current node
-    const findParent = (node: TreeNode, targetFen: string, parent: TreeNode | null): TreeNode | null => {
-      if (node.fen === targetFen) return parent;
-      for (const child of node.children) {
-        const found = findParent(child, targetFen, node);
-        if (found) return found;
-      }
-      return null;
-    };
-
-    const parentNode = findParent(currentTree, currentFen, null);
-    console.log('NavigateLeft - currentFen:', currentFen, 'currentTree:', currentTree === tempTreeData ? 'temp' : 'main', 'foundParent:', !!parentNode);
-    
-    if (parentNode) {
-      console.log('NavigateLeft - moving to parent:', parentNode.fen);
-      onNodeClick({ fen: parentNode.fen, move: parentNode.move || 'Start' });
-    } else {
-      console.log('NavigateLeft - no parent found');
-    }
-  }, [currentFen, data, tempTreeData, onNodeClick]);
+    navigateToNode(findParentByFen(currentTree, currentFen));
+  }, [currentTree, currentFen, navigateToNode]);
 
   const navigateRight = useCallback(() => {
-    // Use tempTreeData if available, otherwise use main data
-    const currentTree = tempTreeData || data;
-    
-    // Find current node in tree
-    const findNode = (node: TreeNode, fen: string): TreeNode | null => {
-      if (node.fen === fen) return node;
-      for (const child of node.children) {
-        const found = findNode(child, fen);
-        if (found) return found;
-      }
-      return null;
-    };
-
-    const currentNode = findNode(currentTree, currentFen);
-    console.log('NavigateRight - currentFen:', currentFen, 'currentTree:', currentTree === tempTreeData ? 'temp' : 'main', 'foundNode:', !!currentNode);
-    
-    if (currentNode && currentNode.children.length > 0) {
-      const nextNode = currentNode.children[0];
-      console.log('NavigateRight - moving to:', nextNode.fen);
-      onNodeClick({ fen: nextNode.fen, move: nextNode.move || 'Start' });
-    } else {
-      console.log('NavigateRight - no current node or no children');
-    }
-  }, [currentFen, data, tempTreeData, onNodeClick]);
-
-  // Recursive function to find parent with multiple children
-  const findBranchPointRecursive = useCallback((node: TreeNode, targetFen: string, visited = new Set<string>()): TreeNode | null => {
-    if (visited.has(node.fen)) return null;
-    visited.add(node.fen);
-    
-    // Check if this node has multiple children and contains the target
-    if (node.children.length > 1) {
-      for (const child of node.children) {
-        if (child.fen === targetFen || containsNode(child, targetFen)) {
-          return node;
-        }
-      }
-    }
-    
-    // Recursively search children
-    for (const child of node.children) {
-      const result = findBranchPointRecursive(child, targetFen, visited);
-      if (result) return result;
-    }
-    
-    return null;
-  }, []);
-
-  // Helper function to check if a subtree contains a node
-  const containsNode = useCallback((node: TreeNode, targetFen: string): boolean => {
-    if (node.fen === targetFen) return true;
-    return node.children.some(child => containsNode(child, targetFen));
-  }, []);
+    navigateToNode(currentNode?.children[0]);
+  }, [currentNode, navigateToNode]);
 
   // Navigate up - use findParentWithMultipleChildren logic like keyboard navigation
   const navigateUp = useCallback(() => {
-    // Use tempTreeData if available, otherwise use main data
-    const currentTree = tempTreeData || data;
-    
     const result = findParentWithMultipleChildren(currentTree, currentFen);
-    
     if (result) {
       const { parent, currentChildIndex } = result;
-      // Go to previous sibling (wrap around)
       const nextIndex = currentChildIndex === 0 ? parent.children.length - 1 : currentChildIndex - 1;
-      const nextSibling = parent.children[nextIndex];
-      onNodeClick({ fen: nextSibling.fen, move: nextSibling.move || 'Start' });
+      navigateToNode(parent.children[nextIndex]);
     }
-  }, [currentFen, data, tempTreeData, onNodeClick]);
+  }, [currentTree, currentFen, navigateToNode]);
 
   // Navigate down - use findParentWithMultipleChildren logic like keyboard navigation
   const navigateDown = useCallback(() => {
-    // Use tempTreeData if available, otherwise use main data
-    const currentTree = tempTreeData || data;
-    
     const result = findParentWithMultipleChildren(currentTree, currentFen);
-    
     if (result) {
       const { parent, currentChildIndex } = result;
-      // Go to next sibling (wrap around)
       const nextIndex = currentChildIndex === parent.children.length - 1 ? 0 : currentChildIndex + 1;
-      const nextSibling = parent.children[nextIndex];
-      onNodeClick({ fen: nextSibling.fen, move: nextSibling.move || 'Start' });
+      navigateToNode(parent.children[nextIndex]);
     }
-  }, [currentFen, data, tempTreeData, onNodeClick]);
+  }, [currentTree, currentFen, navigateToNode]);
 
   // Identify temporary nodes (nodes that exist in tempTreeData but not in main data)
   const tempFens = useMemo(() => {
@@ -302,8 +221,6 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
 
     const nodes: any[] = [];
     const links: any[] = [];
-    // Use tempTreeData if available for depth/position calculations to include temporary nodes
-    const currentTree = tempTreeData || data;
     const depthMap = assignDepths(currentTree);
     const branchPositions = calculateBranchPositions(currentTree, depthMap);
     const tempNodesMap = new Map();
@@ -450,50 +367,43 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
     });
 
     return () => { simulation.stop(); };
-  }, [data, currentFen, focusMode, activePath, onNodeClick, isDeleteMode, tempTreeData, tempFens, isFullscreen]);
+  }, [data, currentFen, currentTree, focusMode, activePath, onNodeClick, isDeleteMode, tempFens, isFullscreen]);
 
-  // Auto-center on current node when currentFen changes
-  useEffect(() => {
+  const centerOnFen = useCallback((fen: string) => {
     if (!svgRef.current || !containerRef.current) return;
 
     const el = svgRef.current;
-    // Use full window dimensions in fullscreen mode, otherwise use container dimensions
     const containerWidth = isFullscreen ? window.innerWidth : (containerRef.current.clientWidth || 600);
     const height = isFullscreen ? window.innerHeight : (containerRef.current.clientHeight || 500);
+    const scale = d3.zoomTransform(el).k || 1;
+    const nodeElements = d3.select(el).selectAll('g').filter((d: any) => d && d.fen === fen);
+    if (nodeElements.size() === 0) return;
 
-    // Find the current node in the tree
-    const findNode = (node: TreeNode, fen: string): TreeNode | null => {
-      if (node.fen === fen) return node;
-      for (const child of node.children) {
-        const found = findNode(child, fen);
-        if (found) return found;
-      }
-      return null;
-    };
+    const nodeData = nodeElements.datum() as any;
+    if (nodeData?.x === undefined || nodeData?.y === undefined) return;
 
-    const currentNode = findNode(data, currentFen);
-    if (!currentNode) return;
+    const x = -nodeData.x * scale + containerWidth / 2;
+    const y = -nodeData.y * scale + height / 2;
+    const zoom = d3.zoom<SVGSVGElement, unknown>();
+    d3.select(el)
+      .transition()
+      .duration(600)
+      .ease(d3.easeCubicOut)
+      .call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+  }, [isFullscreen]);
+
+  // Auto-center on current node when currentFen changes
+  useEffect(() => {
+    const currentNodeForFen = findNodeByFen(data, currentFen);
+    if (!currentNodeForFen) return;
 
     // Wait for the simulation to stabilize, then center
     const timeoutId = setTimeout(() => {
-      const zoom = d3.zoom<SVGSVGElement, unknown>();
-      const scale = d3.zoomTransform(el).k || 1;
-      
-      // Find the D3 node element with matching fen
-      const nodeElements = d3.select(el).selectAll('g').filter((d: any) => d && d.fen === currentFen);
-      if (nodeElements.size() > 0) {
-        const nodeData = nodeElements.datum() as any;
-        if (nodeData && nodeData.x !== undefined && nodeData.y !== undefined) {
-          const x = -nodeData.x * scale + containerWidth / 2;
-          const y = -nodeData.y * scale + height / 2;
-          d3.select(el).transition().duration(600).ease(d3.easeCubicOut)
-            .call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
-        }
-      }
+      centerOnFen(currentFen);
     }, 100); // Small delay to ensure simulation has positioned nodes
 
     return () => clearTimeout(timeoutId);
-  }, [currentFen, data, isFullscreen]);
+  }, [currentFen, data, centerOnFen]);
 
   // Handle keyboard events for arrow key navigation
   useEffect(() => {
@@ -546,16 +456,6 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: '0.5rem', zIndex: 20 }}>
         {(() => {
-          // Find current node to get title
-          const findNode = (node: TreeNode, fen: string): TreeNode | null => {
-            if (node.fen === fen) return node;
-            for (const child of node.children) {
-              const found = findNode(child, fen);
-              if (found) return found;
-            }
-            return null;
-          };
-          const currentNode = findNode(data, currentFen);
           const hasTitle = currentNode?.title;
           
           return (
@@ -742,7 +642,10 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
         {/* Main navigation toggle button */}
         <TooltipButton
           tooltip="Navigation Controls"
-          onClick={() => setNavMenuExpanded(!navMenuExpanded)}
+          onClick={() => {
+            setNavMenuExpanded(!navMenuExpanded);
+            centerOnFen(currentFen);
+          }}
           className="btn btn-secondary"
           style={{
             padding: 0,
