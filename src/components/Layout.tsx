@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown, HelpCircle, CreditCard, WifiOff } from 'lucide-react';
+import { LogOut, Settings as SettingsIcon, User as UserIcon, ChevronDown, HelpCircle, CreditCard } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useDropdown } from '../hooks/useDropdown';
 import TutorialModal from './TutorialModal';

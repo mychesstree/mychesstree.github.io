@@ -439,12 +439,6 @@ export default function Dashboard() {
     setShowPuzzleInterface(true);
   };
 
-  const handleNextPuzzle = () => {
-    if (currentGame && currentPositionIndex < currentGame.puzzle_positions.length - 1) {
-      setCurrentPositionIndex(currentPositionIndex + 1);
-    }
-  };
-
   const handleClosePuzzle = () => {
     setShowPuzzleInterface(false);
     setCurrentGame(null);
@@ -892,7 +886,6 @@ export default function Dashboard() {
           game={currentGame}
           positionIndex={currentPositionIndex}
           onClose={handleClosePuzzle}
-          onNext={handleNextPuzzle}
         />
       )}
     </>

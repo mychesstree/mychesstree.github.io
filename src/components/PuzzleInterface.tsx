@@ -4,7 +4,7 @@ import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import { useAuth } from '../hooks/useAuth';
-import { ArrowLeft, X, Target, Trophy, GitMerge, Plus, Check, ChevronLeft, ChevronRight, Calendar, Lightbulb } from 'lucide-react';
+import { ArrowLeft, X, Target, Trophy, GitMerge, Plus, Check, ChevronLeft, ChevronRight, Lightbulb } from 'lucide-react';
 import { useMobile } from '../hooks/useMobile';
 import { uciToWhiteArrow, addMovesAsVariation } from '../utils/treeUtils';
 import { useToast } from '../components/Toast';
@@ -47,13 +47,12 @@ interface PuzzleInterfaceProps {
   game: DailyGame;
   positionIndex: number;
   onClose: () => void;
-  onNext: () => void;
   selectedDate?: Date;
   onDateChange?: (date: Date) => void;
   dateRange?: { earliest: Date; latest: Date };
 }
 
-export default function PuzzleInterface({ game: initialGame, positionIndex: initialPositionIndex, onClose, onNext, selectedDate: initialSelectedDate = new Date(), onDateChange, dateRange }: PuzzleInterfaceProps) {
+export default function PuzzleInterface({ game: initialGame, positionIndex: initialPositionIndex, onClose, selectedDate: initialSelectedDate = new Date(), onDateChange, dateRange }: PuzzleInterfaceProps) {
   const { user } = useAuth();
   const isMobile = useMobile();
   const { success: showSuccess, info: showInfo, error: showError } = useToast();
@@ -278,10 +277,6 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     }
   };
 
-  const handleTodayClick = () => {
-    fetchGameForDate(new Date());
-  };
-
   const getHintText = () => {
     if (!currentPosition) return '';
     const move = currentPosition.masterMove;
@@ -425,11 +420,11 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   const onPieceDrop = ({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string }) => {
     if (showResult || !currentPosition) return false;
 
-    const game = gameRef.current;
-    const prevFen = game.fen();
+    const chessGame = gameRef.current;
+    const prevFen = chessGame.fen();
 
     try {
-      const moveObj = game.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
+      const moveObj = chessGame.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
 
       if (!moveObj) {
         gameRef.current = new Chess(prevFen);
