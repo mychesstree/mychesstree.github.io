@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [showPuzzleInterface, setShowPuzzleInterface] = useState(false);
   const [currentGame, setCurrentGame] = useState<any>(null);
   const [currentPositionIndex, setCurrentPositionIndex] = useState(0);
+  const [puzzleRefreshTrigger, setPuzzleRefreshTrigger] = useState(0);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -448,6 +449,7 @@ export default function Dashboard() {
     setShowPuzzleInterface(false);
     setCurrentGame(null);
     setCurrentPositionIndex(0);
+    setPuzzleRefreshTrigger(prev => prev + 1);
   };
 
   if (loading) return <div>Loading trees...</div>;
@@ -622,7 +624,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 mb-4" style={{ marginBottom: `${isMobile ? '1.5rem' : '0'}` }}>
+        <div className="flex items-center justify-between gap-2 mb-4" style={{ marginBottom: `${isMobile ? '1.5rem' : '0.5rem'}` }}>
           <div className="flex items-center gap-3" >
             <TooltipButton
               tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
@@ -739,7 +741,7 @@ export default function Dashboard() {
           <div className="decks-scroll-container">
             {/* Daily Master Game Panel - shown in owned view */}
             {viewMode === 'owned' && (
-              <DailyGamePanel onStartPuzzle={handleStartPuzzle} />
+              <DailyGamePanel onStartPuzzle={handleStartPuzzle} refreshTrigger={puzzleRefreshTrigger} />
             )}
 
             {/* Show search results when searching, otherwise show regular trees */}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
-import { Trophy, Play, Check, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Trophy, Check, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 
 interface DailyGame {
   id: string;
@@ -29,9 +29,11 @@ interface DailyGamePanelProps {
   selectedDate?: Date;
   onDateChange?: (date: Date) => void;
   dateRange?: { earliest: Date; latest: Date };
+  refreshTrigger?: number;
 }
 
-export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, game: initialGame, selectedDate = new Date(), onDateChange, dateRange }: DailyGamePanelProps) {
+export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, game: initialGame, selectedDate = new Date(), onDateChange, dateRange, refreshTrigger }: DailyGamePanelProps) {
+  const [localCompleted, setLocalCompleted] = useState(isCompleted);
   const [dailyGame, setDailyGame] = useState<DailyGame | null>(initialGame || null);
   const [loading, setLoading] = useState(!initialGame);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +46,23 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
       fetchDateRange();
     }
   }, [dateRange]);
+
+  useEffect(() => {
+    if (dailyGame) {
+      const localProgressKey = `chesstr.ee_daily_progress_${dailyGame.id}`;
+      try {
+        const localProgress = localStorage.getItem(localProgressKey);
+        if (localProgress) {
+          const completedPositions = JSON.parse(localProgress);
+          if (completedPositions && completedPositions.length >= dailyGame.puzzle_positions.length) {
+            setLocalCompleted(true);
+            return;
+          }
+        }
+      } catch (e) { }
+    }
+    setLocalCompleted(isCompleted);
+  }, [dailyGame, isCompleted, refreshTrigger]);
 
   useEffect(() => {
     if (initialGame) {
@@ -132,7 +151,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
       <div className="card" style={{ padding: '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
           <Trophy size={20} color="var(--accent-color)" />
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Daily Master Game</h3>
+          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Daily Game</h3>
         </div>
         <div style={{ textAlign: 'center', padding: '2rem 0' }}>
           <div style={{
@@ -183,7 +202,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
     <div
       className="card"
       style={{
-        padding: '1rem',
+        padding: '0.5rem',
         maxWidth: '350px',
         cursor: 'pointer',
         transition: 'transform 0.2s ease, box-shadow 0.2s ease',
@@ -199,24 +218,23 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
       }}
     >
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-          <Trophy size={18} color="var(--accent-color)" />
-          <h3 style={{ margin: 0, fontSize: '1rem', fontFamily: 'Outfit, sans-serif' }}>
-            Daily Master Game
-          </h3>
-        </div>
-        <div
-          className="btn"
-          style={{
-            padding: '0.4rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            pointerEvents: 'none'
-          }}
-        >
-          <Play size={18} />
+        <div style={{
+          position: 'absolute',
+          top: -7,
+          right: -17,
+          backgroundColor: 'rgba(119, 19, 19, 0.78)',
+          borderRadius: '0.5rem',
+          padding: '0.4rem',
+          paddingLeft: '0.8rem',
+          paddingRight: '0.8rem',
+          transform: 'translate(-10px,-10px)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+            <Trophy size={14} color="var(--accent-color)" />
+            <h3 style={{ margin: 0, fontSize: '0.8rem' }}>Daily Game</h3>
+          </div>
         </div>
       </div>
 
@@ -303,7 +321,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{ width: '300px', height: '300px', flexShrink: 0 }}>
+        <div style={{ width: '300px', height: '300px', flexShrink: 0, filter: localCompleted ? 'grayscale(100%) opacity(0.5)' : 'none', transition: 'filter 0.3s ease' }}>
           {(() => {
             const Board = Chessboard as any;
             return <Board
@@ -321,24 +339,25 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
       </div>
 
       {/* Completion Overlay */}
-      {isCompleted && (
+      {localCompleted && (
         <div style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)',
+          backgroundColor: 'transparent',
           borderRadius: '8px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          pointerEvents: 'none',
           zIndex: 10
         }}>
           <div style={{
             width: '60px',
             height: '60px',
-            backgroundColor: 'rgba(255,255,255,0.95)',
+            backgroundColor: 'var(--accent-color)',
             borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',

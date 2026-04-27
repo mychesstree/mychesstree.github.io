@@ -15,27 +15,27 @@ interface HeatmapData {
 export default function ReviewHeatmap() {
   const { user, isGuest, loadGuestReviews } = useAuth();
   const [data, setData] = useState<HeatmapData>({});
-  
+
   const fetchStats = async () => {
     if (isGuest) {
       // For guest users, use localStorage data
       try {
         const guestReviews = loadGuestReviews(); // Load all guest reviews (no treeId = all)
         const heatmapData: HeatmapData = {};
-        
+
         guestReviews.forEach(review => {
           // Count reviews by next_review_date
           const reviewDate = review.next_review_date.split('T')[0]; // Get date part only
           heatmapData[reviewDate] = (heatmapData[reviewDate] || 0) + 1;
         });
-        
+
         setData(heatmapData);
       } catch (e) {
         console.error('Guest heatmap fetch error:', e);
       }
       return;
     }
-    
+
     if (!user) return;
     try {
       const { data: stats, error } = await supabase.rpc('get_review_stats', { u_id: user.id });
@@ -65,7 +65,7 @@ export default function ReviewHeatmap() {
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="heatmap-scroll-wrapper" style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+    <div className="heatmap-scroll-wrapper" style={{ marginTop: '1rem', marginBottom: '1rem', padding: '1rem' }}>
       <div>
         <CalendarHeatmap
           startDate={startDate}
@@ -77,10 +77,10 @@ export default function ReviewHeatmap() {
             if (!value || value.count === 0) {
               return value?.date === todayStr ? 'color-empty color-today' : 'color-empty';
             }
-            
+
             const isFuture = value.date > todayStr;
             const level = Math.min(Math.ceil(value.count / 3), 4); // Scale 1-4
-            
+
             const baseClass = isFuture ? `color-gray-${level}` : `color-pink-${level}`;
             return value.date === todayStr ? `${baseClass} color-today` : baseClass;
           }}
