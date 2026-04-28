@@ -53,7 +53,7 @@ export default function Layout() {
           padding: '0.75rem 1rem'
         }}>
           {/* Brand */}
-          <Link to="/" className="app-header-brand" style={{ gap: '0.25rem' }}>
+          <Link to="/" className="app-header-brand" style={{ gap: '0.5rem' }}>
             <img src="/logo.svg" alt="chesstr.ee Logo" style={{ height: 32, width: 'auto' }} />
             <span className="brand-wordmark">
               chesstr<span className="brand-suffix">.ee</span>

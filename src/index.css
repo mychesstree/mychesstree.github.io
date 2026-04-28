@@ -103,7 +103,7 @@ button {
 }
 
 .btn-danger:hover {
-  background-color: #dc2626;
+  background-color: rgb(220, 38, 38);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
@@ -267,7 +267,7 @@ button {
 }
 
 .brand-suffix {
-  color: hsl(342, 63%, 51%);
+  color: rgb(220, 38, 38);
 }
 
 .app-main {
@@ -390,6 +390,30 @@ button {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes boardShake {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-8px); }
+  30%  { transform: translateX(7px); }
+  45%  { transform: translateX(-6px); }
+  60%  { transform: translateX(5px); }
+  75%  { transform: translateX(-3px); }
+  90%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
+.board-shake {
+  animation: boardShake 0.55s ease-in-out;
+}
+
+@keyframes popIn {
+  from { transform: scale(0.3); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .animate-fade-in {

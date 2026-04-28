@@ -4,7 +4,7 @@ import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import { useAuth } from '../hooks/useAuth';
-import { ArrowLeft, X, Target, Trophy, GitMerge, Plus, Check, ChevronLeft, ChevronRight, Lightbulb } from 'lucide-react';
+import { ArrowLeft, X, Target, Trophy, GitMerge, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMobile } from '../hooks/useMobile';
 import { uciToWhiteArrow, addMovesAsVariation } from '../utils/treeUtils';
 import { useToast } from '../components/Toast';
@@ -13,6 +13,7 @@ import CreateTreeModal from '../components/CreateTreeModal';
 interface PuzzlePosition {
   fen: string;
   masterMove: string;
+  master_move?: string; // Support database snake_case
   moveNumber: number;
   turn: string;
 }
@@ -63,12 +64,15 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   const [currentPosition, setCurrentPosition] = useState<PuzzlePosition | null>(null);
   const [, setUserMove] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [boardShake, setBoardShake] = useState(false);
+  const [masterMoveArrow, setMasterMoveArrow] = useState<any[]>([]);
+  const [showFinishCelebration, setShowFinishCelebration] = useState(false);
   const [startTime, setStartTime] = useState<number>(Date.now());
 
   // Progress tracking state
   const [completedPositions, setCompletedPositions] = useState<Set<number>>(new Set());
   const [retryCount, setRetryCount] = useState<{ [key: number]: number }>({});
-  const [showHint, setShowHint] = useState(false);
   const [dateRangeState, setDateRangeState] = useState<{ earliest: Date; latest: Date } | null>(null);
 
   // Engine analysis state
@@ -79,11 +83,15 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   // Tree integration state
   const [showTreeSelection, setShowTreeSelection] = useState(false);
   const [userTrees, setUserTrees] = useState<Tree[]>([]);
+  const [loadingTrees, setLoadingTrees] = useState(false);
   const [selectedTree, setSelectedTree] = useState<Tree | null>(null);
   const [isIntegrating, setIsIntegrating] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newColor, setNewColor] = useState<'white' | 'black'>('white');
+
+  // Clamp latest date to today so users can't navigate to future games
+  // (used inline in the next-button render below)
 
   useEffect(() => {
     if (game && game.puzzle_positions[positionIndex]) {
@@ -93,7 +101,9 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       setStartTime(Date.now());
       setUserMove(null);
       setShowResult(false);
-      setShowHint(false);
+      setIsCorrect(false);
+      setBoardShake(false);
+      setMasterMoveArrow([]);
 
       // Reset engine analysis for new position
       setEvalNum(0);
@@ -105,7 +115,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   useEffect(() => {
     let worker: Worker;
     try {
-      worker = new Worker('/stockfish.js');
+      worker = new Worker('./stockfish.js');
       engineRef.current = worker;
 
       worker.onmessage = (e) => {
@@ -119,6 +129,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
         }
 
         if (line.startsWith('bestmove')) {
+          console.log('Engine best move:', line);
           const bestMoveMatch = line.match(/bestmove ([a-h][1-8][a-h][1-8][qnrb]?)/);
           if (bestMoveMatch) {
             const arrow = uciToWhiteArrow(bestMoveMatch[1]);
@@ -128,7 +139,9 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       };
 
       worker.postMessage('uci');
+      worker.postMessage('ucinewgame');
       worker.postMessage('isready');
+      console.log('Stockfish worker initialized');
     } catch (err) {
       console.error('Failed to initialize Stockfish worker:', err);
     }
@@ -175,14 +188,14 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     if (!game) return;
 
     let completed = new Set<number>();
-    
+
     // Check local storage first
     try {
       const localProgress = localStorage.getItem(`chesstr.ee_daily_progress_${game.id}`);
       if (localProgress) {
         completed = new Set(JSON.parse(localProgress));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (user) {
       try {
@@ -202,7 +215,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
         console.error('Failed to fetch user progress:', err);
       }
     }
-    
+
     setCompletedPositions(completed);
   };
 
@@ -260,6 +273,10 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   const handleDateChange = (direction: 'prev' | 'next') => {
     if (!dateRangeState) return;
 
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const clampedLatest = new Date(Math.min(dateRangeState.latest.getTime(), today.getTime()));
+
     const newDate = new Date(selectedDate);
     if (direction === 'prev') {
       newDate.setDate(newDate.getDate() - 1);
@@ -267,33 +284,16 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       newDate.setDate(newDate.getDate() + 1);
     }
 
-    // Validate date is within range
-    if (newDate >= dateRangeState.earliest && newDate <= dateRangeState.latest) {
+    // Validate date is within range (clamped to today)
+    if (newDate >= dateRangeState.earliest && newDate <= clampedLatest) {
       fetchGameForDate(newDate);
-    } else if (direction === 'next' && newDate > dateRangeState.latest) {
+    } else if (direction === 'next' && newDate > clampedLatest) {
       showError('No future puzzles available yet');
     } else if (direction === 'prev' && newDate < dateRangeState.earliest) {
       showError('No older puzzles available');
     }
   };
 
-  const getHintText = () => {
-    if (!currentPosition) return '';
-    const move = currentPosition.masterMove;
-
-    // Provide hint based on move type
-    if (move.includes('x')) {
-      return 'Hint: Look for a capture!';
-    } else if (move.includes('+')) {
-      return 'Hint: Consider a check!';
-    } else if (move.includes('O-O')) {
-      return 'Hint: Think about castling!';
-    } else if (move.match(/[KQRBN][a-h1-8]/)) {
-      return 'Hint: A piece move might be best!';
-    } else {
-      return 'Hint: Sometimes the quietest moves are strongest!';
-    }
-  };
 
   const handleCreate = async () => {
     if (!newTitle.trim()) return;
@@ -333,26 +333,24 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   };
 
   const fetchUserTrees = async () => {
+    setLoadingTrees(true);
     try {
-      console.log('Fetching trees for user:', user!.id);
       const { data, error } = await supabase
         .from('trees')
         .select('*')
         .eq('user_id', user!.id)
-        .eq('is_daily_game', false)
         .order('updated_at', { ascending: false });
-
-      console.log('Tree fetch result:', { data, error });
 
       if (error) {
         console.error('Tree fetch error:', error);
         throw error;
       }
 
-      console.log('Setting userTrees:', data || []);
       setUserTrees(data || []);
     } catch (err) {
       console.error('Failed to fetch trees:', err);
+    } finally {
+      setLoadingTrees(false);
     }
   };
 
@@ -377,7 +375,10 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       // Add moves to reach the first puzzle position
       for (const position of game.puzzle_positions) {
         try {
-          const move = tempGame.move(position.masterMove);
+          const targetMove = position.masterMove || (position as any).master_move;
+          if (!targetMove) continue;
+
+          const move = tempGame.move(targetMove);
           if (move) {
             puzzleMoves.push(move.san);
           }
@@ -417,59 +418,121 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     }
   };
 
+  // Convert a SAN move at the current position into a UCI-style arrow
+  const sanToArrow = (fen: string, san: string, color: string) => {
+    try {
+      const tempGame = new Chess(fen);
+      const moveObj = tempGame.move(san);
+      if (!moveObj) return null;
+      return { startSquare: moveObj.from, endSquare: moveObj.to, color };
+    } catch {
+      return null;
+    }
+  };
+
   const onPieceDrop = ({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string }) => {
     if (showResult || !currentPosition) return false;
 
-    const chessGame = gameRef.current;
-    const prevFen = chessGame.fen();
+    // Use a copy for validation to avoid mutating the ref prematurely
+    const currentFen = gameRef.current.fen();
+    const validationGame = new Chess(currentFen);
+
+    console.log(`[Puzzle] Validating move ${sourceSquare}-${targetSquare} on FEN: ${currentFen}`);
 
     try {
-      const moveObj = chessGame.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
+      const moveObj = validationGame.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
 
       if (!moveObj) {
-        gameRef.current = new Chess(prevFen);
+        console.warn('[Puzzle] Move rejected by chess.js (illegal)');
         return false;
       }
 
       const userMoveSan = moveObj.san;
-      setUserMove(userMoveSan);
+      const masterMove = currentPosition?.masterMove || currentPosition?.master_move;
 
-      // Check if move matches master move
-      const correct = userMoveSan === currentPosition.masterMove;
+      if (!masterMove) {
+        console.error('[Puzzle] Error: masterMove is missing! Keys:', Object.keys(currentPosition));
+        return false;
+      }
+
+      const correct = userMoveSan === masterMove;
+      console.log(`[Puzzle] User: ${userMoveSan}, Master: ${masterMove}, Correct: ${correct}`);
 
       if (correct) {
+        // Commit the move to the main game ref
+        gameRef.current = validationGame;
+        setUserMove(userMoveSan);
+        setIsCorrect(true);
         setShowResult(true);
-        showSuccess('Correct');
-        // Add to completed positions
+        showSuccess('Correct! ✓');
+
+        // Build master move arrow (green)
+        const mArrow = masterMove ? sanToArrow(currentPosition.fen, masterMove, 'rgba(255, 255, 255, 0.9)') : null;
+        setMasterMoveArrow(mArrow ? [mArrow] : []);
+
+        // Save progress
+        const localProgressKey = `chesstr.ee_daily_progress_${game.id}`;
         setCompletedPositions(prev => {
           const newCompleted = new Set([...prev, positionIndex]);
-          const localProgressKey = `chesstr.ee_daily_progress_${game.id}`;
           localStorage.setItem(localProgressKey, JSON.stringify(Array.from(newCompleted)));
           return newCompleted;
         });
       } else {
-        // Increment retry count
         const currentRetries = retryCount[positionIndex] || 0;
         const newRetries = currentRetries + 1;
         setRetryCount(prev => ({ ...prev, [positionIndex]: newRetries }));
 
-        // Show hint after 2 incorrect attempts
         if (newRetries >= 2) {
-          setShowHint(true);
-          showInfo(getHintText());
-        } else {
-          showInfo('Good try!');
-        }
+          // Second mistake - Reveal the answer
+          const masterMove = currentPosition.masterMove || currentPosition.master_move;
+          if (masterMove) {
+            const masterGame = new Chess(currentPosition.fen);
+            try {
+              masterGame.move(masterMove);
+              gameRef.current = masterGame; // Set board to master move state
+            } catch (e) {
+              console.error('[Puzzle] Failed to execute master move:', masterMove, e);
+            }
+          }
 
-        setShowResult(true);
+          const mArrow = masterMove ? sanToArrow(currentPosition.fen, masterMove, 'rgba(255, 255, 255, 0.9)') : null;
+          setMasterMoveArrow(mArrow ? [mArrow] : []);
+          setIsCorrect(false);
+          setShowResult(true);
+          showInfo(`The move was ${masterMove || 'Unknown'}`);
+
+          // Mark as done for dashboard
+          const localDoneKey = `chesstr.ee_daily_done_${game.id}`;
+          try {
+            const done = JSON.parse(localStorage.getItem(localDoneKey) || '[]');
+            if (!done.includes(positionIndex)) {
+              localStorage.setItem(localDoneKey, JSON.stringify([...done, positionIndex]));
+            }
+          } catch (e) { }
+
+          // Record attempt
+          recordAttempt(userMoveSan, correct);
+
+          // Return false so the WRONG piece snaps back, then the board re-renders with the master move
+          return false;
+        } else {
+          // First mistake - Shake and snap back
+          setBoardShake(true);
+          showInfo('Not quite — try again!');
+          setTimeout(() => setBoardShake(false), 600);
+
+          // Record attempt
+          recordAttempt(userMoveSan, correct);
+
+          return false; // Snap piece back
+        }
       }
 
       // Record attempt
       recordAttempt(userMoveSan, correct);
-
       return true;
-    } catch {
-      gameRef.current = new Chess(prevFen);
+    } catch (err) {
+      console.error('Move validation error:', err);
       return false;
     }
   };
@@ -486,7 +549,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
         position_index: positionIndex,
         fen: currentPosition.fen,
         user_move: userMoveSan,
-        master_move: currentPosition.masterMove,
+        master_move: currentPosition.masterMove || currentPosition.master_move,
         is_correct: correct,
         time_taken: timeTaken
       });
@@ -500,7 +563,12 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     if (positionIndex < game.puzzle_positions.length - 1) {
       setPositionIndex(positionIndex + 1);
     } else {
-      onClose();
+      // Show celebration before closing
+      setShowFinishCelebration(true);
+      setTimeout(() => {
+        setShowFinishCelebration(false);
+        onClose();
+      }, 2000);
     }
   };
 
@@ -602,13 +670,23 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
             </div>
 
             {/* Board */}
-            <div style={{ flex: 1, width: '100%', maxWidth: '100vw' }}>
+            <div
+              style={{ flex: 1, width: '100%', maxWidth: '100vw' }}
+              className={boardShake ? 'board-shake' : ''}
+            >
               {(() => {
                 const Board = Chessboard as any;
+                // After result: show green master move arrow + yellow engine arrow separately
+                const arrows = showResult
+                  ? [
+                    ...masterMoveArrow,
+                    ...engineArrows.map((a: any) => ({ ...a, color: 'rgba(250, 21, 21, 0.85)' }))
+                  ]
+                  : [];
                 return <Board
                   options={{
                     position: gameRef.current.fen(),
-                    onPieceDrop: onPieceDrop,
+                    onPieceDrop: showResult ? undefined : onPieceDrop,
                     boardOrientation: currentPosition?.turn === 'black' ? 'black' : 'white',
                     pieces: calientePieces,
                     darkSquareStyle: boardStyles.darkSquareStyle,
@@ -616,10 +694,14 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                     boardStyle: {
                       ...boardStyles.boardStyle,
                       borderRadius: '4px',
-                      boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
+                      boxShadow: showResult
+                        ? isCorrect
+                          ? '0 0 0 3px rgba(255, 255, 255, 0.5), 0 8px 30px rgba(0,0,0,0.5)'
+                          : '0 0 0 3px rgba(239,68,68,0.4), 0 8px 30px rgba(0,0,0,0.5)'
+                        : '0 8px 30px rgba(0,0,0,0.5)'
                     },
                     showNotation: false,
-                    arrows: showResult ? engineArrows : []
+                    arrows
                   }}
                 />;
               })()}
@@ -696,24 +778,30 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                 </div>
 
                 <div style={{ width: '26px', display: 'flex', justifyContent: 'center' }}>
-                  {(!dateRangeState || selectedDate < dateRangeState.latest) && (
-                    <button
-                      onClick={() => handleDateChange('next')}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: '0.25rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        cursor: 'pointer',
-                        color: 'var(--text-muted)'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-                    >
-                      <ChevronRight size={18} />
-                    </button>
-                  )}
+                  {/* Only show next button if there's a previous day to navigate to (never allow future dates) */}
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999);
+                    const isAtOrPastToday = selectedDate >= today;
+                    return !isAtOrPastToday && (
+                      <button
+                        onClick={() => handleDateChange('next')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: '0.25rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          color: 'var(--text-muted)'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -742,32 +830,56 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
 
               {/* Progress indicators */}
               <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.75rem' }}>
-                {game.puzzle_positions.map((_, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      flex: 1,
-                      height: '6px',
-                      borderRadius: '3px',
-                      backgroundColor: completedPositions.has(index)
-                        ? 'var(--accent-color)'
-                        : index === positionIndex
-                          ? 'var(--border-color)'
-                          : 'var(--panel-bg)',
-                      border: '1px solid var(--border-color)'
-                    }}
-                    title={`Position ${index + 1}${completedPositions.has(index) ? ' (Completed)' : ''}`}
-                  />
-                ))}
+                {game.puzzle_positions.map((_, index) => {
+                  const isCompleted = completedPositions.has(index);
+                  const isRevealed = (() => {
+                    try {
+                      const done = JSON.parse(localStorage.getItem(`chesstr.ee_daily_done_${game.id}`) || '[]');
+                      return done.includes(index);
+                    } catch (e) { return false; }
+                  })();
+
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        flex: 1,
+                        height: '6px',
+                        borderRadius: '3px',
+                        backgroundColor: isCompleted
+                          ? 'rgba(255, 255, 255, 1)'
+                          : isRevealed
+                            ? 'rgba(239, 68, 68, 0.5)'
+                            : index === positionIndex
+                              ? 'var(--border-color)'
+                              : 'var(--panel-bg)',
+                        border: '1px solid var(--border-color)',
+                        transition: 'all 0.3s ease'
+                      }}
+                      title={`Position ${index + 1}${isCompleted ? ' (Correct)' : isRevealed ? ' (Revealed)' : ''}`}
+                    />
+                  );
+                })}
               </div>
 
               {/* Position checkmarks */}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {game.puzzle_positions.map((_, index) => (
-                  <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {completedPositions.has(index) && <Check size={12} color="var(--accent-color)" />}
-                  </div>
-                ))}
+                {game.puzzle_positions.map((_, index) => {
+                  const isCompleted = completedPositions.has(index);
+                  const isRevealed = (() => {
+                    try {
+                      const done = JSON.parse(localStorage.getItem(`chesstr.ee_daily_done_${game.id}`) || '[]');
+                      return done.includes(index);
+                    } catch (e) { return false; }
+                  })();
+
+                  return (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px' }}>
+                      {isCompleted && <Check size={14} color="rgba(255, 255, 255, 1)" />}
+                      {isRevealed && <X size={14} color="rgba(239, 68, 68, 0.8)" />}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -815,53 +927,79 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
             )}
           </div>
 
-          {/* Position Info */}
-          <div style={{ marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-              <Target size={18} color="var(--accent-color)" />
-              <h4 style={{ margin: 0, fontSize: '1.1rem' }}>Move {currentPosition.moveNumber}</h4>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Target size={18} color="var(--accent-color)" />
+                <h4 style={{ margin: 0, fontSize: '1.1rem' }}>Move {currentPosition.moveNumber}</h4>
+              </div>
+              <div style={{
+                fontSize: '0.8rem',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '12px',
+                backgroundColor: currentPosition.turn === 'white' ? '#fff' : '#333',
+                color: currentPosition.turn === 'white' ? '#333' : '#fff',
+                fontWeight: 600,
+                border: '1px solid var(--border-color)'
+              }}>
+                {currentPosition.turn === 'white' ? 'White' : 'Black'} to move
+              </div>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                 {positionIndex + 1}/{game.puzzle_positions.length}
               </span>
             </div>
 
-            <div style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>
-              <div className="text-muted">
+            {!showResult && (
+              <div className="text-muted" style={{ fontSize: '0.9rem' }}>
                 What move was played in this game?
               </div>
+            )}
 
-              {/* Retry counter and hint */}
-              {(retryCount[positionIndex] > 0 || showHint) && (
-                <div style={{ marginTop: '1rem' }}>
-                  {retryCount[positionIndex] > 0 && (
-                    <div style={{
-                      fontSize: '0.85rem',
-                      color: 'var(--text-muted)',
-                      marginBottom: '0.5rem'
-                    }}>
-                      Attempts: {retryCount[positionIndex]}
-                    </div>
-                  )}
-
-                  {showHint && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      padding: '0.75rem',
-                      backgroundColor: 'var(--panel-bg)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '6px',
-                      fontSize: '0.85rem',
-                      color: 'var(--text-secondary)'
-                    }}>
-                      <Lightbulb size={16} color="var(--accent-color)" />
-                      {getHintText()}
-                    </div>
-                  )}
+            {/* Result feedback card */}
+            {showResult && (
+              <div style={{
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                backgroundColor: isCorrect ? 'rgba(197, 34, 34, 0.1)' : 'rgba(239,68,68,0.1)',
+                border: `1px solid ${isCorrect ? 'rgba(255, 172, 172, 0.4)' : 'rgba(239,68,68,0.35)'}`,
+                marginBottom: '1rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: isCorrect ? 0 : '0.5rem' }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '50%',
+                    backgroundColor: isCorrect ? 'rgba(255, 207, 207, 0.8)' : 'rgba(239,68,68,0.8)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }}>
+                    {isCorrect
+                      ? <Check size={14} color="white" />
+                      : <X size={14} color="white" />
+                    }
+                  </div>
+                  <span style={{ fontWeight: 600, fontSize: '0.95rem', color: isCorrect ? 'rgba(255, 226, 226, 1)' : 'rgb(239,68,68)' }}>
+                    {isCorrect ? 'Correct!' : 'Revealed'}
+                  </span>
                 </div>
-              )}
-            </div>
+                {!isCorrect && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', paddingLeft: '2rem' }}>
+                    Master move: <span style={{ color: 'rgba(255, 236, 236, 1)', fontWeight: 600 }}>{currentPosition.masterMove || (currentPosition as any).master_move}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Arrow legend shown after result */}
+            {showResult && engineArrows.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ width: 28, height: 4, borderRadius: 2, backgroundColor: 'rgba(255, 255, 255, 0.85)' }} />
+                  <span>Game Move</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ width: 28, height: 4, borderRadius: 2, backgroundColor: 'rgba(250, 21, 21, 0.85)' }} />
+                  <span>Engine best move</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Navigation */}
@@ -872,7 +1010,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                 className="btn"
                 style={{ width: '100%' }}
               >
-                {positionIndex < game.puzzle_positions.length - 1 ? 'Next Position' : 'Finish'}
+                {positionIndex < game.puzzle_positions.length - 1 ? 'Next Position' : '🎉 Finish'}
               </button>
 
               {positionIndex === game.puzzle_positions.length - 1 && user && (
@@ -889,6 +1027,41 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
           )}
         </div>
       </div>
+
+      {/* Finish Celebration Overlay */}
+      {showFinishCelebration && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          zIndex: 99999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexDirection: 'column', gap: '1.5rem',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <div style={{
+            width: 120, height: 120,
+            backgroundColor: 'var(--accent-color)',
+            borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 80px rgba(225, 29, 72, 0.5)',
+            animation: 'popIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275)'
+          }}>
+            <Trophy size={64} color="white" />
+          </div>
+          <div style={{ textAlign: 'center', animation: 'fadeIn 0.6s ease 0.2s forwards', opacity: 0 }}>
+            <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '2.5rem', fontFamily: 'Outfit, sans-serif' }}>Daily Game Complete!</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', margin: 0 }}>
+              {(() => {
+                const total = game.puzzle_positions.length;
+                const correct = completedPositions.size;
+                if (correct === total) return 'Perfect score! Master level performance. 🔥';
+                if (correct >= total * 0.7) return `Great job! ${correct}/${total} correct. 🎯`;
+                return `Finished! ${correct}/${total} moves found. Keep practicing! 📚`;
+              })()}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Tree Selection Modal */}
       {showTreeSelection && (
@@ -923,63 +1096,82 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
             </p>
 
             <div style={{ marginBottom: '1.5rem' }}>
-              {(() => {
-                console.log('Rendering tree selection, userTrees.length:', userTrees.length);
-                console.log('userTrees:', userTrees);
-                return userTrees.length === 0 ? (
-                  <div className="card text-center" style={{ padding: '4rem 2rem' }}>
-                    <GitMerge size={48} className="text-muted" style={{ margin: '0 auto 1rem auto' }} />
-                    <h3>No opening trees yet</h3>
-                    <p className="text-muted mb-4">Create your first tree to start mapping out your theory.</p>
-                    <button onClick={() => setIsCreating(true)} className="btn">
-                      <Plus size={18} />
-                      Create Tree
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {userTrees.map((tree) => (
-                      <div
-                        key={tree.id}
-                        onClick={() => setSelectedTree(tree)}
-                        style={{
-                          padding: '1rem',
-                          border: `2px solid ${selectedTree?.id === tree.id ? 'var(--accent-color)' : 'var(--border-color)'}`,
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          backgroundColor: selectedTree?.id === tree.id ? 'var(--accent-color)' : 'transparent',
-                          color: selectedTree?.id === tree.id ? 'white' : 'inherit',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '1rem'
-                        }}
-                      >
-                        <div style={{ width: '48px', height: '48px', flexShrink: 0, pointerEvents: 'none' }}>
-                          {(() => {
-                            const Board = Chessboard as any;
-                            return <Board
-                              options={{
-                                position: tree.tree_data?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-                                boardOrientation: tree.color === 'black' ? 'black' : 'white',
-                                pieces: calientePieces,
-                                darkSquareStyle: boardStyles.darkSquareStyle,
-                                lightSquareStyle: boardStyles.lightSquareStyle,
-                                showNotation: false
-                              }}
-                            />;
-                          })()}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>{tree.title}</div>
-                          <div style={{ fontSize: '0.85rem', opacity: selectedTree?.id === tree.id ? 1 : 0.8 }}>
-                            {tree.node_count} nodes • {tree.color === 'white' ? 'White' : 'Black'} perspective
-                          </div>
+              {loadingTrees ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+                  <div style={{
+                    width: 28,
+                    height: 28,
+                    border: '3px solid var(--border-color)',
+                    borderTop: '3px solid var(--accent-color)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                    margin: '0 auto 1rem auto'
+                  }} />
+                  <p className="text-muted" style={{ fontSize: '0.9rem' }}>Loading your trees...</p>
+                </div>
+              ) : userTrees.length === 0 ? (
+                <div className="card text-center" style={{ padding: '3rem 1.5rem' }}>
+                  <GitMerge size={40} className="text-muted" style={{ margin: '0 auto 0.75rem auto' }} />
+                  <h3 style={{ marginBottom: '0.5rem' }}>No opening trees yet</h3>
+                  <p className="text-muted mb-4" style={{ fontSize: '0.9rem' }}>Create your first tree to start mapping out your opening theory.</p>
+                  <button onClick={() => setIsCreating(true)} className="btn">
+                    <Plus size={18} />
+                    Create Tree
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '320px', overflowY: 'auto' }}>
+                  {userTrees.map((tree) => (
+                    <div
+                      key={tree.id}
+                      onClick={() => setSelectedTree(tree)}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        border: `2px solid ${selectedTree?.id === tree.id ? 'var(--accent-color)' : 'var(--border-color)'}`,
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        backgroundColor: selectedTree?.id === tree.id ? 'rgba(var(--accent-rgb, 180, 90, 40), 0.15)' : 'transparent',
+                        transition: 'all 0.15s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem'
+                      }}
+                      onMouseEnter={(e) => { if (selectedTree?.id !== tree.id) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
+                      onMouseLeave={(e) => { if (selectedTree?.id !== tree.id) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                      <div style={{ width: '44px', height: '44px', flexShrink: 0, pointerEvents: 'none', borderRadius: '4px', overflow: 'hidden' }}>
+                        {(() => {
+                          const Board = Chessboard as any;
+                          return <Board
+                            options={{
+                              position: tree.tree_data?.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                              boardOrientation: tree.color === 'black' ? 'black' : 'white',
+                              pieces: calientePieces,
+                              darkSquareStyle: boardStyles.darkSquareStyle,
+                              lightSquareStyle: boardStyles.lightSquareStyle,
+                              showNotation: false
+                            }}
+                          />;
+                        })()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontWeight: '600',
+                          marginBottom: '0.2rem',
+                          color: selectedTree?.id === tree.id ? 'var(--accent-color)' : 'var(--text-primary)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                        }}>{tree.title}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          {tree.color === 'white' ? 'White' : 'Black'} perspective
                         </div>
                       </div>
-                    ))}
-                  </div>
-                );
-              })()}
+                      {selectedTree?.id === tree.id && (
+                        <Check size={18} color="var(--accent-color)" style={{ flexShrink: 0 }} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: '0.5rem' }}>

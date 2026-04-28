@@ -50,14 +50,15 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
   useEffect(() => {
     if (dailyGame) {
       const localProgressKey = `chesstr.ee_daily_progress_${dailyGame.id}`;
+      const localDoneKey = `chesstr.ee_daily_done_${dailyGame.id}`;
       try {
-        const localProgress = localStorage.getItem(localProgressKey);
-        if (localProgress) {
-          const completedPositions = JSON.parse(localProgress);
-          if (completedPositions && completedPositions.length >= dailyGame.puzzle_positions.length) {
-            setLocalCompleted(true);
-            return;
-          }
+        const localProgress = JSON.parse(localStorage.getItem(localProgressKey) || '[]');
+        const localDone = JSON.parse(localStorage.getItem(localDoneKey) || '[]');
+        const allDone = new Set([...localProgress, ...localDone]);
+        
+        if (allDone.size >= dailyGame.puzzle_positions.length) {
+          setLocalCompleted(true);
+          return;
         }
       } catch (e) { }
     }
@@ -219,7 +220,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
       }}
     >
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', }}>
         <div style={{
           position: 'absolute',
           top: -7,
@@ -230,6 +231,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
           paddingLeft: '0.8rem',
           paddingRight: '0.8rem',
           transform: 'translate(-10px,-10px)',
+          zIndex: 999999999
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
             <Trophy size={14} color="var(--accent-color)" />
@@ -280,7 +282,9 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
                 e.stopPropagation();
                 const newDate = new Date(selectedDate);
                 newDate.setDate(newDate.getDate() + 1);
-                if (newDate <= dateRangeState.latest) {
+                const today = new Date();
+                today.setHours(23, 59, 59, 999);
+                if (newDate <= dateRangeState.latest && newDate <= today) {
                   onDateChange(newDate);
                 }
               }}
@@ -291,7 +295,11 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
                 alignItems: 'center',
                 fontSize: '0.8rem'
               }}
-              disabled={selectedDate >= dateRangeState.latest}
+              disabled={(() => {
+                const today = new Date();
+                today.setHours(23, 59, 59, 999);
+                return selectedDate >= dateRangeState.latest || selectedDate >= today;
+              })()}
             >
               <ChevronRight size={14} />
             </button>
@@ -321,7 +329,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{ width: '300px', height: '300px', flexShrink: 0, filter: localCompleted ? 'grayscale(100%) opacity(0.5)' : 'none', transition: 'filter 0.3s ease' }}>
+        <div style={{ width: '300px', height: '300px', flexShrink: 0, filter: localCompleted ? 'grayscale(100%) opacity(0.5)' : 'none', transition: 'filter 0.3s ease', borderRadius: '10px', overflow: 'hidden' }}>
           {(() => {
             const Board = Chessboard as any;
             return <Board
