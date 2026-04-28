@@ -570,8 +570,8 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       }
 
       const isMasterMove = userMoveSan === masterMove;
-      const isEngineMove = engineBestMoveUCI && userMoveUCI === engineBestMoveUCI;
-      const correct = isMasterMove || isEngineMove;
+      const isEngineMove = !!(engineBestMoveUCI && userMoveUCI === engineBestMoveUCI);
+      const correct = !!(isMasterMove || isEngineMove);
 
       console.log(`[Puzzle] User: ${userMoveSan} (${userMoveUCI}), Game: ${masterMove}, Engine: ${engineBestMoveUCI}, Correct: ${correct}`);
 
