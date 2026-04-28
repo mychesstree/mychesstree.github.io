@@ -6,7 +6,7 @@ import { calientePieces, boardStyles } from '../lib/chessAssets';
 import { useAuth } from '../hooks/useAuth';
 import { ArrowLeft, X, Target, Trophy, GitMerge, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMobile } from '../hooks/useMobile';
-import { uciToWhiteArrow, addMovesAsVariation } from '../utils/treeUtils';
+import { uciToWhiteArrow, addMovesAsVariation, parsePgnMoves } from '../utils/treeUtils';
 import { useToast } from '../components/Toast';
 import CreateTreeModal from '../components/CreateTreeModal';
 
@@ -27,6 +27,7 @@ interface DailyGame {
   black_rating?: number;
   result: string;
   opening_name?: string;
+  pgn?: string;
   puzzle_positions: PuzzlePosition[];
 }
 
@@ -81,6 +82,12 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   const [engineArrows, setEngineArrows] = useState<any[]>([]);
   const [engineBestMoveUCI, setEngineBestMoveUCI] = useState<string | null>(null);
 
+  // Full game review state
+  const [fullGameMoves, setFullGameMoves] = useState<string[]>([]);
+  const [fullGameFens, setFullGameFens] = useState<string[]>([]);
+  const [reviewIndex, setReviewIndex] = useState<number | null>(null);
+  const replayIntervalRef = useRef<any>(null);
+
   // Tree integration state
   const [showTreeSelection, setShowTreeSelection] = useState(false);
   const [userTrees, setUserTrees] = useState<Tree[]>([]);
@@ -101,8 +108,6 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       gameRef.current = new Chess(position.fen);
       setStartTime(Date.now());
       setUserMove(null);
-      setShowResult(false);
-      setIsCorrect(false);
       setBoardShake(false);
       setMasterMoveArrow([]);
 
@@ -110,8 +115,54 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       setEvalNum(0);
       setEngineArrows([]);
       setEngineBestMoveUCI(null);
+      setReviewIndex(null);
+
+      // Auto-show result if already completed or revealed
+      const isDoneLocally = (() => {
+        try {
+          const done = JSON.parse(localStorage.getItem(`chesstr.ee_daily_done_${game.id}`) || '[]');
+          return done.includes(positionIndex);
+        } catch (e) { return false; }
+      })();
+
+      const isActuallyDone = completedPositions.has(positionIndex) || isDoneLocally;
+      setIsCorrect(completedPositions.has(positionIndex));
+
+      if (isActuallyDone) {
+        setShowResult(true);
+        const mArrow = sanToArrow(position.fen, position.masterMove || (position as any).master_move, 'rgba(255, 255, 255, 0.9)');
+        setMasterMoveArrow(mArrow ? [mArrow] : []);
+      } else {
+        setShowResult(false);
+      }
     }
-  }, [game, positionIndex]);
+  }, [game, positionIndex, completedPositions]);
+
+  // Pre-parse PGN for review mode when game loads
+  useEffect(() => {
+    if (game && game.pgn) {
+      try {
+        const tempGame = new Chess();
+        const fens = [tempGame.fen()];
+        const moves: string[] = [];
+
+        const { moves: parsedMoves } = parsePgnMoves(game.pgn);
+        for (const m of parsedMoves) {
+          try {
+            const result = tempGame.move(m);
+            if (result) {
+              moves.push(result.san);
+              fens.push(tempGame.fen());
+            }
+          } catch (e) { }
+        }
+        setFullGameMoves(moves);
+        setFullGameFens(fens);
+      } catch (e) {
+        console.error('Failed to parse PGN:', e);
+      }
+    }
+  }, [game]);
 
   // Initialize engine
   useEffect(() => {
@@ -188,6 +239,40 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     }
   }, [dateRange]);
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        if (replayIntervalRef.current) {
+          clearInterval(replayIntervalRef.current);
+          replayIntervalRef.current = null;
+          setShowFinishCelebration(false);
+        }
+      }
+
+      if (e.key === 'ArrowRight' && !showFinishCelebration) {
+        if (reviewIndex !== null) {
+          if (reviewIndex < fullGameFens.length - 1) {
+            setReviewIndex(prev => prev! + 1);
+          }
+        } else if (showResult && positionIndex < game.puzzle_positions.length - 1) {
+          handleNext();
+        }
+      } else if (e.key === 'ArrowLeft' && !showFinishCelebration) {
+        if (reviewIndex !== null) {
+          if (reviewIndex > 0) {
+            setReviewIndex(prev => prev! - 1);
+          }
+        } else if (positionIndex > 0) {
+          setPositionIndex(prev => prev - 1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [positionIndex, reviewIndex, showResult, game, fullGameFens, showFinishCelebration]);
+
   const fetchUserProgress = async () => {
     if (!game) return;
 
@@ -227,16 +312,16 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       try {
         const localDone = JSON.parse(localStorage.getItem(`chesstr.ee_daily_done_${game.id}`) || '[]');
         const allDone = new Set([...Array.from(completed), ...localDone]);
-        
+
         let firstUnsolved = 0;
         while (firstUnsolved < game.puzzle_positions.length && allDone.has(firstUnsolved)) {
           firstUnsolved++;
         }
-        
+
         if (firstUnsolved < game.puzzle_positions.length && firstUnsolved !== positionIndex) {
           setPositionIndex(firstUnsolved);
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   };
 
@@ -389,33 +474,40 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
 
       if (fetchError) throw fetchError;
 
-      // Create moves array from the game (all puzzle positions)
-      const puzzleMoves: string[] = [];
-      const tempGame = new Chess();
+      // Create moves array from the game
+      let movesToAdd: string[] = [];
 
-      // Add moves to reach the first puzzle position
-      for (const position of game.puzzle_positions) {
-        try {
-          const targetMove = position.masterMove || (position as any).master_move;
-          if (!targetMove) continue;
+      if (game.pgn) {
+        // Use full PGN moves if available (similar to Lichess import)
+        const { moves } = parsePgnMoves(game.pgn);
+        movesToAdd = moves;
+      } else {
+        // Fallback to just the puzzle positions
+        const tempGame = new Chess();
+        for (const position of game.puzzle_positions) {
+          let targetMove: string | undefined;
+          try {
+            targetMove = position.masterMove || (position as any).master_move;
+            if (!targetMove) continue;
 
-          const move = tempGame.move(targetMove);
-          if (move) {
-            puzzleMoves.push(move.san);
+            const move = tempGame.move(targetMove);
+            if (move) {
+              movesToAdd.push(move.san);
+            }
+          } catch (e) {
+            console.error('Failed to add master move:', targetMove);
+            break;
           }
-        } catch (e) {
-          console.error('Failed to add master move:', position.masterMove);
-          break;
         }
       }
 
-      if (puzzleMoves.length === 0) {
+      if (movesToAdd.length === 0) {
         showError('No valid moves found in puzzle');
         return;
       }
 
       // Add moves to tree as variation
-      const updatedTree = addMovesAsVariation(treeDataRes.tree_data, puzzleMoves);
+      const updatedTree = addMovesAsVariation(treeDataRes.tree_data, movesToAdd);
 
       // Save updated tree
       const { error: saveError } = await supabase
@@ -428,7 +520,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
 
       if (saveError) throw saveError;
 
-      showSuccess(`Added ${puzzleMoves.length} moves to "${selectedTree.title}"`);
+      showSuccess(`Added ${movesToAdd.length} moves to "${selectedTree.title}"`);
       setShowTreeSelection(false);
       setSelectedTree(null);
     } catch (err) {
@@ -481,7 +573,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       const isEngineMove = engineBestMoveUCI && userMoveUCI === engineBestMoveUCI;
       const correct = isMasterMove || isEngineMove;
 
-      console.log(`[Puzzle] User: ${userMoveSan} (${userMoveUCI}), Master: ${masterMove}, Engine: ${engineBestMoveUCI}, Correct: ${correct}`);
+      console.log(`[Puzzle] User: ${userMoveSan} (${userMoveUCI}), Game: ${masterMove}, Engine: ${engineBestMoveUCI}, Correct: ${correct}`);
 
       if (correct) {
         // Commit the move to the main game ref
@@ -516,7 +608,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
               masterGame.move(masterMove);
               gameRef.current = masterGame; // Set board to master move state
             } catch (e) {
-              console.error('[Puzzle] Failed to execute master move:', masterMove, e);
+              console.error('[Puzzle] Failed to execute move:', masterMove, e);
             }
           }
 
@@ -588,12 +680,27 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     if (positionIndex < game.puzzle_positions.length - 1) {
       setPositionIndex(positionIndex + 1);
     } else {
-      // Show celebration before closing
+      // Start celebration and auto-replay of the WHOLE game
       setShowFinishCelebration(true);
+
+      // Auto-replay animation: Start from move 0 of the entire game
       setTimeout(() => {
-        setShowFinishCelebration(false);
-        onClose();
-      }, 2000);
+        setReviewIndex(0);
+        let currentStep = 0;
+        const totalMoves = fullGameFens.length - 1;
+        
+        if (replayIntervalRef.current) clearInterval(replayIntervalRef.current);
+        
+        replayIntervalRef.current = setInterval(() => {
+          currentStep++;
+          setReviewIndex(currentStep);
+          if (currentStep >= totalMoves) {
+            clearInterval(replayIntervalRef.current);
+            replayIntervalRef.current = null;
+            setTimeout(() => setShowFinishCelebration(false), 1000);
+          }
+        }, 500); // Slightly faster replay for whole game
+      }, 1500);
     }
   };
 
@@ -702,16 +809,18 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
               {(() => {
                 const Board = Chessboard as any;
                 // After result: show green master move arrow + yellow engine arrow separately
-                const arrows = showResult
-                  ? [
-                    ...masterMoveArrow,
-                    ...engineArrows.map((a: any) => ({ ...a, color: 'rgba(250, 21, 21, 0.85)' }))
-                  ]
-                  : [];
+                const arrows = reviewIndex !== null
+                  ? [] // No arrows during full game review
+                  : showResult
+                    ? [
+                      ...masterMoveArrow,
+                      ...engineArrows.map((a: any) => ({ ...a, color: 'rgba(250, 21, 21, 0.85)' }))
+                    ]
+                    : [];
                 return <Board
                   options={{
-                    position: gameRef.current.fen(),
-                    onPieceDrop: showResult ? undefined : onPieceDrop,
+                    position: reviewIndex !== null ? fullGameFens[reviewIndex] : gameRef.current.fen(),
+                    onPieceDrop: (reviewIndex !== null || showResult) ? undefined : onPieceDrop,
                     boardOrientation: currentPosition?.turn === 'black' ? 'black' : 'white',
                     pieces: calientePieces,
                     darkSquareStyle: boardStyles.darkSquareStyle,
@@ -764,7 +873,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
               </button>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center' }}>
                 <Trophy size={20} color="var(--accent-color)" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Daily Master Game</h3>
+                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Daily Game</h3>
               </div>
             </div>
 
@@ -852,9 +961,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
 
             {/* Progress Bar */}
             <div style={{ marginBottom: '1.5rem' }}>
-
-              {/* Progress indicators */}
-              <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', gap: '3px', width: '100%', marginBottom: '0.75rem' }}>
                 {game.puzzle_positions.map((_, index) => {
                   const isCompleted = completedPositions.has(index);
                   const isRevealed = (() => {
@@ -867,42 +974,23 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                   return (
                     <div
                       key={index}
+                      onClick={() => setPositionIndex(index)}
                       style={{
                         flex: 1,
                         height: '6px',
                         borderRadius: '3px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
                         backgroundColor: isCompleted
                           ? 'rgba(255, 255, 255, 1)'
                           : isRevealed
                             ? 'rgba(239, 68, 68, 0.5)'
                             : index === positionIndex
-                              ? 'var(--border-color)'
-                              : 'var(--panel-bg)',
-                        border: '1px solid var(--border-color)',
-                        transition: 'all 0.3s ease'
+                              ? 'var(--accent-color)'
+                              : 'rgba(255,255,255,0.15)',
+                        boxShadow: index === positionIndex ? '0 0 8px var(--accent-color)' : 'none'
                       }}
-                      title={`Position ${index + 1}${isCompleted ? ' (Correct)' : isRevealed ? ' (Revealed)' : ''}`}
                     />
-                  );
-                })}
-              </div>
-
-              {/* Position checkmarks */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                {game.puzzle_positions.map((_, index) => {
-                  const isCompleted = completedPositions.has(index);
-                  const isRevealed = (() => {
-                    try {
-                      const done = JSON.parse(localStorage.getItem(`chesstr.ee_daily_done_${game.id}`) || '[]');
-                      return done.includes(index);
-                    } catch (e) { return false; }
-                  })();
-
-                  return (
-                    <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px' }}>
-                      {isCompleted && <Check size={14} color="rgba(255, 255, 255, 1)" />}
-                      {isRevealed && <X size={14} color="rgba(239, 68, 68, 0.8)" />}
-                    </div>
                   );
                 })}
               </div>
@@ -956,22 +1044,76 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Target size={18} color="var(--accent-color)" />
-                <h4 style={{ margin: 0, fontSize: '1.1rem' }}>Move {currentPosition.moveNumber}</h4>
+                <div style={{
+                  fontSize: '0.8rem',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '12px',
+                  backgroundColor: currentPosition.turn === 'white' ? '#fff' : '#333',
+                  color: currentPosition.turn === 'white' ? '#333' : '#fff',
+                  fontWeight: 600,
+                  border: '1px solid var(--border-color)'
+                }}>
+                  {reviewIndex !== null
+                    ? (reviewIndex === 0
+                      ? 'Start'
+                      : `${Math.ceil(reviewIndex / 2)}. ${reviewIndex % 2 === 1 ? fullGameMoves[reviewIndex - 1] : '...' + fullGameMoves[reviewIndex - 1]}`)
+                    : `${currentPosition.turn === 'white' ? 'White' : 'Black'} to move`
+                  }
+                </div> </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button 
+                  onClick={() => {
+                    if (replayIntervalRef.current) {
+                      clearInterval(replayIntervalRef.current);
+                      replayIntervalRef.current = null;
+                      setShowFinishCelebration(false);
+                    }
+                    if (reviewIndex !== null) {
+                      if (reviewIndex > 0) setReviewIndex(prev => prev! - 1);
+                    } else if (positionIndex > 0) {
+                      setPositionIndex(prev => prev - 1);
+                    }
+                  }}
+                  disabled={reviewIndex !== null ? reviewIndex === 0 : positionIndex === 0}
+                  style={{
+                    background: 'none', border: 'none', padding: '0.25rem', color: 'var(--text-muted)',
+                    cursor: (reviewIndex !== null ? reviewIndex === 0 : positionIndex === 0) ? 'default' : 'pointer',
+                    opacity: (reviewIndex !== null ? reviewIndex === 0 : positionIndex === 0) ? 0.3 : 1,
+                    display: 'flex', alignItems: 'center'
+                  }}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                {reviewIndex === null && (
+                  <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', minWidth: '2.5rem', textAlign: 'center' }}>
+                    {positionIndex + 1}/{game.puzzle_positions.length}
+                  </span>
+                )}
+                <button 
+                  onClick={() => {
+                    if (replayIntervalRef.current) {
+                      clearInterval(replayIntervalRef.current);
+                      replayIntervalRef.current = null;
+                      setShowFinishCelebration(false);
+                    }
+                    if (reviewIndex !== null) {
+                      if (reviewIndex < fullGameFens.length - 1) setReviewIndex(prev => prev! + 1);
+                    } else if (showResult && positionIndex < game.puzzle_positions.length - 1) {
+                      handleNext();
+                    }
+                  }}
+                  disabled={reviewIndex !== null ? reviewIndex >= fullGameFens.length - 1 : (!showResult || positionIndex >= game.puzzle_positions.length - 1)}
+                  style={{
+                    background: 'none', border: 'none', padding: '0.25rem', color: 'var(--text-muted)',
+                    cursor: (reviewIndex !== null ? reviewIndex >= fullGameFens.length - 1 : (!showResult || positionIndex >= game.puzzle_positions.length - 1)) ? 'default' : 'pointer',
+                    opacity: (reviewIndex !== null ? reviewIndex >= fullGameFens.length - 1 : (!showResult || positionIndex >= game.puzzle_positions.length - 1)) ? 0.3 : 1,
+                    display: 'flex', alignItems: 'center'
+                  }}
+                >
+                  <ChevronRight size={18} />
+                </button>
               </div>
-              <div style={{
-                fontSize: '0.8rem',
-                padding: '0.2rem 0.6rem',
-                borderRadius: '12px',
-                backgroundColor: currentPosition.turn === 'white' ? '#fff' : '#333',
-                color: currentPosition.turn === 'white' ? '#333' : '#fff',
-                fontWeight: 600,
-                border: '1px solid var(--border-color)'
-              }}>
-                {currentPosition.turn === 'white' ? 'White' : 'Black'} to move
-              </div>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                {positionIndex + 1}/{game.puzzle_positions.length}
-              </span>
             </div>
 
             {!showResult && (
@@ -981,7 +1123,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
             )}
 
             {/* Result feedback card */}
-            {showResult && (
+            {showResult && reviewIndex === null && (
               <div style={{
                 padding: '0.75rem 1rem',
                 borderRadius: '8px',
@@ -1012,8 +1154,33 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
               </div>
             )}
 
+            {/* PGN Code Block in Review Mode */}
+            {reviewIndex !== null && game.pgn && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  <GitMerge size={14} />
+                  <span>Full Game PGN</span>
+                </div>
+                <div style={{ 
+                  backgroundColor: 'rgba(0,0,0,0.3)', 
+                  padding: '1rem', 
+                  borderRadius: '8px', 
+                  fontSize: '0.8rem', 
+                  fontFamily: 'monospace', 
+                  lineHeight: '1.5',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  {game.pgn.split('\n\n')[1] || game.pgn}
+                </div>
+              </div>
+            )}
+
             {/* Arrow legend shown after result */}
-            {showResult && engineArrows.length > 0 && (
+            {showResult && engineArrows.length > 0 && reviewIndex === null && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <div style={{ width: 28, height: 4, borderRadius: 2, backgroundColor: 'rgba(255, 255, 255, 0.85)' }} />
@@ -1055,14 +1222,18 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
 
       {/* Finish Celebration Overlay */}
       {showFinishCelebration && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)',
-          zIndex: 99999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexDirection: 'column', gap: '1.5rem',
-          animation: 'fadeIn 0.3s ease'
-        }}>
+        <div 
+          onClick={() => setShowFinishCelebration(false)}
+          style={{
+            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            zIndex: 99999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexDirection: 'column', gap: '1.5rem',
+            animation: 'fadeIn 0.3s ease',
+            cursor: 'pointer'
+          }}
+        >
           <div style={{
             width: 120, height: 120,
             backgroundColor: 'var(--accent-color)',
@@ -1079,9 +1250,9 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
               {(() => {
                 const total = game.puzzle_positions.length;
                 const correct = completedPositions.size;
-                if (correct === total) return 'Perfect score! Master level performance. 🔥';
-                if (correct >= total * 0.7) return `Great job! ${correct}/${total} correct. 🎯`;
-                return `Finished! ${correct}/${total} moves found. Keep practicing! 📚`;
+                if (correct === total) return 'Perfect score! Master level performance.';
+                if (correct >= total * 0.7) return `Great job! ${correct}/${total} correct.`;
+                return `Finished! ${correct}/${total} moves found. Keep practicing!`;
               })()}
             </p>
           </div>
