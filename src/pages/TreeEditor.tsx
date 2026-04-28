@@ -80,7 +80,7 @@ export default function TreeEditor() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [treeFullscreen, setTreeFullscreen] = useState(false);
-  const [history, setHistory] = useState<TreeNode[]>([]);
+  const [history, setHistory] = useState<Array<{ treeData: TreeNode; fen: string }>>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isPublic, setIsPublic] = useState(false);
   const [showPublicUrlModal, setShowPublicUrlModal] = useState(false);
@@ -91,10 +91,13 @@ export default function TreeEditor() {
   const [currentFen, setCurrentFen] = useState(() => gameRef.current.fen());
 
   // Helper function to add to history
-  const addToHistory = useCallback((tree: TreeNode) => {
+  const addToHistory = useCallback((tree: TreeNode, fen: string) => {
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push(JSON.parse(JSON.stringify(tree)));
+      newHistory.push({ 
+        treeData: JSON.parse(JSON.stringify(tree)),
+        fen 
+      });
       return newHistory;
     });
     setHistoryIndex(prev => prev + 1);
@@ -103,21 +106,21 @@ export default function TreeEditor() {
   // Initialize history when tree data loads
   useEffect(() => {
     if (treeData && history.length === 0) {
-      addToHistory(treeData);
+      addToHistory(treeData, currentFen);
     }
-  }, [treeData, history.length, addToHistory]);
+  }, [treeData, history.length, addToHistory, currentFen]);
 
   // Undo function
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
-      const newTree = history[historyIndex - 1];
+      const { treeData: newTree, fen: newFen } = history[historyIndex - 1];
       setTreeData(newTree);
       setHistoryIndex(prev => prev - 1);
       setHasPending(true);
 
-      // TODO: set the fen to the previous fen
-      // const newFen = gameRef.current.fen();
-      // setCurrentFen(newFen);
+      // Set the fen to the previous fen
+      gameRef.current = new Chess(newFen);
+      setCurrentFen(newFen);
     }
   }, [history, historyIndex]);
 
@@ -565,7 +568,7 @@ export default function TreeEditor() {
       })();
       if (newTree) {
         setTreeData(newTree);
-        addToHistory(newTree);
+        addToHistory(newTree, newFen);
         setHasPending(true);
       }
 
@@ -595,7 +598,7 @@ export default function TreeEditor() {
       return cloned;
     })();
     setTreeData(newTree);
-    addToHistory(newTree);
+    addToHistory(newTree, currentFen);
 
     // Reset to start if deleted node was current position
     if (currentFen === nodeToDelete.fen) {
@@ -838,11 +841,11 @@ export default function TreeEditor() {
       setTreeData(newTreeData);
       setTempTreeData(null);
       setHasUnsavedChanges(false);
-      addToHistory(newTreeData);
+      addToHistory(newTreeData, currentFen);
       setHasPending(true);
       setStudyImportStatus({ type: 'success', msg: 'Changes saved successfully!' });
     }
-  }, [tempTreeData, hasUnsavedChanges, addToHistory]);
+  }, [tempTreeData, hasUnsavedChanges, addToHistory, currentFen]);
 
   const handleNodeUpdate = useCallback((nodeFen: string, title: string, description: string) => {
     if (!treeData) return;
@@ -859,9 +862,9 @@ export default function TreeEditor() {
 
     const updatedTree = updateNodeInfo(treeData);
     setTreeData(updatedTree);
-    addToHistory(updatedTree);
+    addToHistory(updatedTree, currentFen);
     setHasPending(true);
-  }, [treeData, addToHistory]);
+  }, [treeData, addToHistory, currentFen]);
 
   const runMobileMenuAction = useCallback((action: () => void) => {
     action();

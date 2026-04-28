@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Info, Edit2, X } from 'lucide-react';
 import type { TreeNode } from '../types/tree';
+import { getOpeningName } from '../utils/openingTheory';
 
 interface NodeInfoProps {
   node: TreeNode;
@@ -10,18 +11,23 @@ interface NodeInfoProps {
 
 export default function NodeInfo({ node, onUpdate, compact = false }: NodeInfoProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState(node.title || '');
+  const opening = getOpeningName(node.fen);
+  const [title, setTitle] = useState(node.title || (opening ? opening.substring(0, 20) : ''));
   const [description, setDescription] = useState(node.description || '');
 
   const handleSave = () => {
     if (onUpdate) {
-      onUpdate(title.trim().substring(0, 20), description.trim().substring(0, 100));
+      let finalTitle = title.trim().substring(0, 20);
+      if (opening && finalTitle === opening.substring(0, 20).trim()) {
+        finalTitle = '';
+      }
+      onUpdate(finalTitle, description.trim().substring(0, 100));
     }
     setIsEditing(false);
   };
 
   const handleCancel = () => {
-    setTitle(node.title || '');
+    setTitle(node.title || (opening ? opening.substring(0, 20) : ''));
     setDescription(node.description || '');
     setIsEditing(false);
   };
@@ -128,6 +134,21 @@ export default function NodeInfo({ node, onUpdate, compact = false }: NodeInfoPr
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
+          {opening && (
+            <div style={{ 
+              fontSize: '0.7rem', 
+              color: 'var(--accent-color)', 
+              fontWeight: '700', 
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: '0.25rem',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {opening}
+            </div>
+          )}
           {hasInfo ? (
             <>
               {node.title && (

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import { GitBranchPlus, GitBranch, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Info, X, Navigation } from 'lucide-react';
 import TooltipButton from './TooltipButton';
-import { findParentWithMultipleChildren } from '../utils/treeUtils';
+import { findParentWithMultipleChildren, countNodes } from '../utils/treeUtils';
+import { getOpeningName, isTheoryPosition } from '../utils/openingTheory';
 
 export interface TreeNode {
   fen: string;
@@ -230,15 +231,23 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
       const onPath = activePath.has(node.fen);
       const isVisible = !focusMode || onPath || (parentFen && activePath.has(parentFen));
       const isTemp = tempFens.has(node.fen);
+      const isTheory = isTheoryPosition(node.fen);
 
       if (isVisible) {
         if (!tempNodesMap.has(node.fen)) {
-          const n = { id: node.fen, fen: node.fen, move: node.move ?? 'Start', isPending: !!node.isPending, depth, onPath, isTemp };
+          const n = { id: node.fen, fen: node.fen, move: node.move ?? 'Start', isPending: !!node.isPending, depth, onPath, isTemp, isTheory };
           tempNodesMap.set(node.fen, n);
           nodes.push(n);
         }
         if (parentFen && tempNodesMap.has(parentFen)) {
-          links.push({ source: parentFen, target: node.fen, isPending: !!node.isPending, onPath: onPath && activePath.has(parentFen), isTemp });
+          links.push({ 
+            source: parentFen, 
+            target: node.fen, 
+            isPending: !!node.isPending, 
+            onPath: onPath && activePath.has(parentFen), 
+            isTemp,
+            isTheory: isTheory && isTheoryPosition(parentFen)
+          });
         }
       }
       for (const child of node.children) buildGraph(child, node.fen);
@@ -309,10 +318,25 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
     if (rootNode) { rootNode.fx = 100; rootNode.fy = height / 2; }
 
     const link = g.append('g').selectAll('line').data(links).enter().append('line')
-      .attr('stroke', (d: any) => d.isTemp ? '#666' : d.onPath ? 'white' : d.isPending ? '#f59e0b' : 'var(--border-color-focus)')
-      .attr('stroke-width', (d: any) => d.isTemp ? 2 : d.onPath ? 4 : 2)
+      .attr('stroke', (d: any) => {
+        if (d.isTemp) return '#666';
+        if (d.onPath) return 'white';
+        if (d.isPending) return '#f59e0b';
+        if (d.isTheory) return '#ff4444'; // Brighter red for common openings
+        return 'var(--border-color-focus)';
+      })
+      .attr('stroke-width', (d: any) => {
+        if (d.onPath) return 4;
+        if (d.isTheory) return 2.5; // Slightly thicker for theory
+        return 2;
+      })
       .attr('stroke-dasharray', (d: any) => d.isTemp ? '3,4' : d.isPending ? '6,4' : '0')
-      .attr('stroke-opacity', (d: any) => d.isTemp ? 0.8 : d.onPath ? 1 : 0.4);
+      .attr('stroke-opacity', (d: any) => {
+        if (d.isTemp) return 0.8;
+        if (d.onPath) return 1;
+        if (d.isTheory) return 0.6; // More visible red for theory
+        return 0.4;
+      });
 
     const node = g.append('g').selectAll('g').data(nodes).enter().append('g')
       .style('cursor', isDeleteMode ? 'crosshair' : 'pointer')
@@ -350,10 +374,13 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
       })
       .attr('stroke-width', (d: any) => d.isTemp ? 1 : d.onPath ? 3 : 2);
 
-    node.append('text').text((d: any) => d.move ?? '').attr('dx', 0).attr('dy', -20)
+    node.append('text')
+      .text((d: any) => d.move ?? '')
+      .attr('dx', 0).attr('dy', -20)
       .attr('text-anchor', 'middle')
       .attr('font-size', 12).attr('font-weight', (d: any) => d.onPath ? 'bold' : 'normal')
-      .attr('fill', '#fda4af').attr('pointer-events', 'none');
+      .attr('fill', '#fff').attr('pointer-events', 'none')
+      .style('text-shadow', '0 1px 2px rgba(0,0,0,0.8)');
 
     node.call(d3.drag<SVGGElement, any>()
       .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
@@ -456,15 +483,18 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: '0.5rem', zIndex: 20 }}>
         {(() => {
-          const hasTitle = currentNode?.title;
-          
+          const opening = currentNode ? getOpeningName(currentNode.fen) : null;
+          const isRoot = currentNode && currentTree && currentNode.fen === currentTree.fen;
+          const displayTitle = isRoot ? `${countNodes(currentTree)} nodes` : (currentNode?.title || opening);
+
           return (
-            <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.5)', padding: '2px 8px 2px 2px', borderRadius: '6px', border: '1px solid var(--border-color)', height: 40 }}>
               <TooltipButton
                 tooltip="Node Information"
                 onClick={() => {
                   if (currentNode) {
-                    setNodeTitle(currentNode.title || '');
+                    const opening = getOpeningName(currentNode.fen);
+                    setNodeTitle(currentNode.title || opening || '');
                     setNodeDescription(currentNode.description || '');
                     setShowNodeInfoModal(true);
                   }
@@ -472,12 +502,11 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
                 className="btn btn-secondary"
                 style={{
                   padding: 0,
-                  width: 36,
-                  height: 36,
-                  background: 'rgba(0,0,0,0.5)',
+                  width: 34,
+                  height: 34,
+                  background: 'transparent',
                   color: '#fff',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
+                  border: 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center'
@@ -485,25 +514,21 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
               >
                 <Info size={20} />
               </TooltipButton>
-              {hasTitle && (
-                <div style={{
-                  background: 'rgba(0,0,0,0.7)',
-                  color: '#fff',
-                  padding: '0.5rem 0.75rem',
-                  borderRadius: '4px',
-                  fontSize: '0.8rem',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  maxWidth: '200px',
+              {displayTitle && (
+                <span style={{ 
+                  fontSize: '0.75rem', 
+                  color: '#fff', 
+                  fontWeight: '600', 
+                  maxWidth: '180px', 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis', 
                   whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  paddingRight: '4px'
                 }}>
-                  {currentNode.title}
-                </div>
+                  {displayTitle}
+                </span>
               )}
-            </>
+            </div>
           );
         })()}
       </div>
@@ -780,7 +805,12 @@ export default function ForceTree({ data, currentFen, onNodeClick, onNodeUpdate,
                 <button
                   onClick={() => {
                     if (onNodeUpdate) {
-                      onNodeUpdate(currentFen, nodeTitle.trim(), nodeDescription.trim());
+                      const opening = getOpeningName(currentFen);
+                      let finalTitle = nodeTitle.trim();
+                      if (opening && finalTitle === opening.substring(0, 20).trim()) {
+                        finalTitle = '';
+                      }
+                      onNodeUpdate(currentFen, finalTitle, nodeDescription.trim());
                     }
                     setShowNodeInfoModal(false);
                   }}
