@@ -759,14 +759,28 @@ rect {
 @media (min-width: 768px) {
   .decks-scroll-container {
     flex-wrap: nowrap;
-    /* overflow-x: auto; */
+    overflow-x: auto;
     scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-    /* Hide for clean look */
+    scrollbar-width: thin; /* Show thin scrollbar for visibility */
   }
 
   .decks-scroll-container::-webkit-scrollbar {
-    display: none;
+    display: block;
+    height: 6px;
+  }
+  
+  .decks-scroll-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+  }
+  
+  .decks-scroll-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
+  
+  .decks-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 
   .decks-scroll-container>div {

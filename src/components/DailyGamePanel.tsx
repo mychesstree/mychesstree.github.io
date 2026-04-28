@@ -55,7 +55,7 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
         const localProgress = JSON.parse(localStorage.getItem(localProgressKey) || '[]');
         const localDone = JSON.parse(localStorage.getItem(localDoneKey) || '[]');
         const allDone = new Set([...localProgress, ...localDone]);
-        
+
         if (allDone.size >= dailyGame.puzzle_positions.length) {
           setLocalCompleted(true);
           return;
@@ -223,8 +223,8 @@ export default function DailyGamePanel({ onStartPuzzle, isCompleted = false, gam
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', }}>
         <div style={{
           position: 'absolute',
-          top: -7,
-          right: -17,
+          top: 20,
+          right: 0,
           backgroundColor: 'rgba(119, 19, 19, 0.78)',
           borderRadius: '0.5rem',
           padding: '0.4rem',
