@@ -79,6 +79,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   const engineRef = useRef<Worker | null>(null);
   const [evalNum, setEvalNum] = useState(0);
   const [engineArrows, setEngineArrows] = useState<any[]>([]);
+  const [engineBestMoveUCI, setEngineBestMoveUCI] = useState<string | null>(null);
 
   // Tree integration state
   const [showTreeSelection, setShowTreeSelection] = useState(false);
@@ -108,6 +109,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       // Reset engine analysis for new position
       setEvalNum(0);
       setEngineArrows([]);
+      setEngineBestMoveUCI(null);
     }
   }, [game, positionIndex]);
 
@@ -132,8 +134,10 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
           console.log('Engine best move:', line);
           const bestMoveMatch = line.match(/bestmove ([a-h][1-8][a-h][1-8][qnrb]?)/);
           if (bestMoveMatch) {
-            const arrow = uciToWhiteArrow(bestMoveMatch[1]);
-            setEngineArrows(arrow ? [{ ...arrow, key: `engine-${bestMoveMatch[1]}` }] : []);
+            const uci = bestMoveMatch[1];
+            setEngineBestMoveUCI(uci);
+            const arrow = uciToWhiteArrow(uci);
+            setEngineArrows(arrow ? [{ ...arrow, key: `engine-${uci}` }] : []);
           }
         }
       };
@@ -217,6 +221,23 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
     }
 
     setCompletedPositions(completed);
+
+    // Auto-advance to first unsolved position if we're at the start
+    if (positionIndex === 0 && completed.size > 0) {
+      try {
+        const localDone = JSON.parse(localStorage.getItem(`chesstr.ee_daily_done_${game.id}`) || '[]');
+        const allDone = new Set([...Array.from(completed), ...localDone]);
+        
+        let firstUnsolved = 0;
+        while (firstUnsolved < game.puzzle_positions.length && allDone.has(firstUnsolved)) {
+          firstUnsolved++;
+        }
+        
+        if (firstUnsolved < game.puzzle_positions.length && firstUnsolved !== positionIndex) {
+          setPositionIndex(firstUnsolved);
+        }
+      } catch (e) {}
+    }
   };
 
   const fetchDateRange = async () => {
@@ -448,6 +469,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       }
 
       const userMoveSan = moveObj.san;
+      const userMoveUCI = moveObj.from + moveObj.to + (moveObj.promotion || '');
       const masterMove = currentPosition?.masterMove || currentPosition?.master_move;
 
       if (!masterMove) {
@@ -455,8 +477,11 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
         return false;
       }
 
-      const correct = userMoveSan === masterMove;
-      console.log(`[Puzzle] User: ${userMoveSan}, Master: ${masterMove}, Correct: ${correct}`);
+      const isMasterMove = userMoveSan === masterMove;
+      const isEngineMove = engineBestMoveUCI && userMoveUCI === engineBestMoveUCI;
+      const correct = isMasterMove || isEngineMove;
+
+      console.log(`[Puzzle] User: ${userMoveSan} (${userMoveUCI}), Master: ${masterMove}, Engine: ${engineBestMoveUCI}, Correct: ${correct}`);
 
       if (correct) {
         // Commit the move to the main game ref
