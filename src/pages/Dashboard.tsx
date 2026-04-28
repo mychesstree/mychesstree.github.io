@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2, HelpCircle } from 'lucide-react';
 import StarButton from '../components/StarButton';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
@@ -13,6 +13,7 @@ import PuzzleInterface from '../components/PuzzleInterface';
 import type { TreeNode } from '../types/tree';
 import { calculateDuePositions } from '../utils/treeUtils';
 import { useToast } from '../components/Toast';
+import GuidedTour from '../components/GuidedTour';
 
 interface Tree {
   id: string;
@@ -54,6 +55,16 @@ export default function Dashboard() {
   const [currentGame, setCurrentGame] = useState<any>(null);
   const [currentPositionIndex, setCurrentPositionIndex] = useState(0);
   const [puzzleRefreshTrigger, setPuzzleRefreshTrigger] = useState(0);
+  const [showTour, setShowTour] = useState(false);
+
+  useEffect(() => {
+    // Check if user has seen the tour
+    const hasSeenTour = localStorage.getItem('chesstr.ee_tour_seen');
+    if (!hasSeenTour) {
+      // Delay slightly to ensure layout is ready
+      setTimeout(() => setShowTour(true), 1500);
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -621,6 +632,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between gap-2 mb-4" style={{ marginBottom: `${isMobile ? '1.5rem' : '0.5rem'}` }}>
           <div className="flex items-center gap-3" >
             <TooltipButton
+              id="tour-search"
               tooltip={viewMode === 'owned' ? "View Shared Trees" : "View My Trees"}
               onClick={() => setViewMode(viewMode === 'owned' ? 'shared' : 'owned')}
               className={`btn btn-icon ${viewMode === 'shared' ? '' : 'btn-secondary'}`}
@@ -640,6 +652,7 @@ export default function Dashboard() {
           </div>
           <div className="flex gap-2">
             <button
+              id="tour-import"
               onClick={() => setShowImportExportModal(true)}
               className="btn btn-secondary"
               title={isMobile ? "Import/Export" : undefined}
@@ -648,6 +661,7 @@ export default function Dashboard() {
               {!isMobile && " Import/Export"}
             </button>
             <button
+              id="tour-create"
               onClick={() => setIsCreating(true)}
               className="btn"
               title={isMobile ? "New Tree" : undefined}
@@ -700,10 +714,16 @@ export default function Dashboard() {
             <GitMerge size={48} className="text-muted" style={{ margin: '0 auto 1rem auto' }} />
             <h3>No opening trees yet</h3>
             <p className="text-muted mb-4">Create your first tree to start mapping out your theory.</p>
-            <button onClick={() => setIsCreating(true)} className="btn">
-              <Plus size={18} />
-              Create Tree
-            </button>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setIsCreating(true)} className="btn">
+                <Plus size={18} />
+                Create Tree
+              </button>
+              <button onClick={() => setShowTour(true)} className="btn btn-secondary">
+                <HelpCircle size={18} />
+                Tutorial
+              </button>
+            </div>
           </div>
         ) : trees.length === 0 && !isCreating && viewMode === 'shared' && searchQuery === '' ? (
           <div className="card text-center" style={{ padding: '4rem 2rem' }}>
@@ -886,6 +906,44 @@ export default function Dashboard() {
           game={currentGame}
           positionIndex={currentPositionIndex}
           onClose={handleClosePuzzle}
+        />
+      )}
+      {showTour && (
+        <GuidedTour
+          steps={[
+            {
+              targetId: 'tour-search',
+              title: 'Discover Community Theory',
+              content: 'Switch to search mode to explore and star public opening trees created by other players.',
+              position: 'bottom'
+            },
+            {
+              targetId: 'tour-import',
+              title: 'Backup & Import',
+              content: 'Export your repertoire to keep it safe and import it on other devices. This is unlimited and free',
+              position: 'bottom'
+            },
+            {
+              targetId: 'tour-profile',
+              title: 'Your Account',
+              content: 'Manage your settings, subscription, and account preferences here.',
+              position: 'bottom'
+            },
+            {
+              targetId: 'tour-create',
+              title: 'Build Your Repertoire',
+              content: 'Ready to map your own theory? Create a new tree and start making moves (and saving them) to start building your opening repertoire!',
+              position: 'bottom'
+            }
+          ]}
+          onComplete={() => {
+            setShowTour(false);
+            localStorage.setItem('chesstr.ee_tour_seen', 'true');
+          }}
+          onSkip={() => {
+            setShowTour(false);
+            localStorage.setItem('chesstr.ee_tour_seen', 'true');
+          }}
         />
       )}
     </>

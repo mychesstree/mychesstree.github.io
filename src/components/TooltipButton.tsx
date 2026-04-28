@@ -8,9 +8,10 @@ interface TooltipButtonProps {
   className?: string;
   onClick?: () => void;
   style?: React.CSSProperties;
+  id?: string;
 }
 
-export default function TooltipButton({ children, tooltip, className, onClick, style }: TooltipButtonProps) {
+export default function TooltipButton({ children, tooltip, className, onClick, style, id }: TooltipButtonProps) {
   const { showTooltip, hideTooltip } = useTooltip();
   const isMobile = useMobile();
 
@@ -48,6 +49,7 @@ export default function TooltipButton({ children, tooltip, className, onClick, s
 
   return (
     <button
+      id={id}
       className={className}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}

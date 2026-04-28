@@ -63,6 +63,7 @@ export default function Layout() {
           {/* Profile button + dropdown */}
           <div ref={wrapperRef} style={{ position: 'relative' }}>
             <button
+              id="tour-profile"
               onClick={toggleDropdown}
               className="btn btn-secondary"
               style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}

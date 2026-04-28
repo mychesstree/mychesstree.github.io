@@ -56,7 +56,7 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
         <div
           style={{
             position: 'fixed',
-            left: tooltip.x,
+            left: Math.max(10, Math.min(window.innerWidth - 10, tooltip.x)),
             top: tooltip.y,
             transform: 'translate(-50%, -100%)',
             backgroundColor: '#1e1b1c',
