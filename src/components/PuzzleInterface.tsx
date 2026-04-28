@@ -4,7 +4,7 @@ import { Chessboard } from 'react-chessboard';
 import { supabase } from '../lib/supabase';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import { useAuth } from '../hooks/useAuth';
-import { ArrowLeft, X, Target, Trophy, GitMerge, Plus, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, X, Target, Trophy, GitMerge, Plus, Check, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { useMobile } from '../hooks/useMobile';
 import { uciToWhiteArrow, addMovesAsVariation, parsePgnMoves } from '../utils/treeUtils';
 import { useToast } from '../components/Toast';
@@ -86,6 +86,8 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   const [fullGameMoves, setFullGameMoves] = useState<string[]>([]);
   const [fullGameFens, setFullGameFens] = useState<string[]>([]);
   const [reviewIndex, setReviewIndex] = useState<number | null>(null);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [importMoveLimit, setImportMoveLimit] = useState<number>(0);
   const replayIntervalRef = useRef<any>(null);
 
   // Tree integration state
@@ -158,6 +160,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
         }
         setFullGameMoves(moves);
         setFullGameFens(fens);
+        setImportMoveLimit(moves.length); // Default to full game
       } catch (e) {
         console.error('Failed to parse PGN:', e);
       }
@@ -216,12 +219,21 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   // Run engine analysis when position changes
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || !currentPosition) return;
+    if (!engine) return;
+
+    let fen = '';
+    if (reviewIndex !== null && fullGameFens[reviewIndex]) {
+      fen = fullGameFens[reviewIndex];
+    } else if (currentPosition) {
+      fen = currentPosition.fen;
+    }
+
+    if (!fen) return;
 
     engine.postMessage('stop');
-    engine.postMessage(`position fen ${currentPosition.fen}`);
+    engine.postMessage(`position fen ${fen}`);
     engine.postMessage('go depth 12');
-  }, [currentPosition]);
+  }, [currentPosition, reviewIndex, fullGameFens]);
 
   // Fetch user progress for current game
   useEffect(() => {
@@ -480,7 +492,8 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       if (game.pgn) {
         // Use full PGN moves if available (similar to Lichess import)
         const { moves } = parsePgnMoves(game.pgn);
-        movesToAdd = moves;
+        // Apply user-specified limit
+        movesToAdd = moves.slice(0, importMoveLimit > 0 ? importMoveLimit : moves.length);
       } else {
         // Fallback to just the puzzle positions
         const tempGame = new Chess();
@@ -821,7 +834,11 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                   options={{
                     position: reviewIndex !== null ? fullGameFens[reviewIndex] : gameRef.current.fen(),
                     onPieceDrop: (reviewIndex !== null || showResult) ? undefined : onPieceDrop,
-                    boardOrientation: currentPosition?.turn === 'black' ? 'black' : 'white',
+                    boardOrientation: (() => {
+                      const base = currentPosition?.turn === 'black' ? 'black' : 'white';
+                      if (!isFlipped) return base;
+                      return base === 'white' ? 'black' : 'white';
+                    })(),
                     pieces: calientePieces,
                     darkSquareStyle: boardStyles.darkSquareStyle,
                     lightSquareStyle: boardStyles.lightSquareStyle,
@@ -1062,6 +1079,18 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                 </div> </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                {reviewIndex !== null && (
+                  <button 
+                    onClick={() => setIsFlipped(!isFlipped)}
+                    title="Flip Board"
+                    style={{
+                      background: 'none', border: 'none', padding: '0.25rem', color: 'var(--text-muted)',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', marginRight: '0.5rem'
+                    }}
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                )}
                 <button 
                   onClick={() => {
                     if (replayIntervalRef.current) {
@@ -1369,6 +1398,30 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                 </div>
               )}
             </div>
+
+            {/* Move Limit Selector */}
+            {game.pgn && fullGameMoves.length > 0 && (
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>Import moves up to:</label>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--accent-color)', fontWeight: 700 }}>
+                    Move {Math.ceil(importMoveLimit / 2)}{importMoveLimit % 2 === 1 ? 'w' : 'b'} ({importMoveLimit} plies)
+                  </span>
+                </div>
+                <input 
+                  type="range"
+                  min="1"
+                  max={fullGameMoves.length}
+                  value={importMoveLimit}
+                  onChange={(e) => setImportMoveLimit(parseInt(e.target.value))}
+                  style={{ width: '100%', accentColor: 'var(--accent-color)', cursor: 'pointer' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.25rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  <span>Start</span>
+                  <span>End of Game ({fullGameMoves.length})</span>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
