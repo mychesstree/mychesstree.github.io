@@ -80,6 +80,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
   const engineRef = useRef<Worker | null>(null);
   const [evalNum, setEvalNum] = useState(0);
   const [engineArrows, setEngineArrows] = useState<any[]>([]);
+  const engineBestMoveUCIRef = useRef<string | null>(null);
   const [engineBestMoveUCI, setEngineBestMoveUCI] = useState<string | null>(null);
 
   // Full game review state
@@ -117,6 +118,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       setEvalNum(0);
       setEngineArrows([]);
       setEngineBestMoveUCI(null);
+      engineBestMoveUCIRef.current = null
       setReviewIndex(null);
 
       // Auto-show result if already completed or revealed
@@ -189,6 +191,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
           const bestMoveMatch = line.match(/bestmove ([a-h][1-8][a-h][1-8][qnrb]?)/);
           if (bestMoveMatch) {
             const uci = bestMoveMatch[1];
+            engineBestMoveUCIRef.current = uci
             setEngineBestMoveUCI(uci);
             const arrow = uciToWhiteArrow(uci);
             setEngineArrows(arrow ? [{ ...arrow, key: `engine-${uci}` }] : []);
@@ -583,7 +586,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
       }
 
       const isMasterMove = userMoveSan === masterMove;
-      const isEngineMove = !!(engineBestMoveUCI && userMoveUCI === engineBestMoveUCI);
+      const isEngineMove = !!(engineBestMoveUCIRef.current && userMoveUCI === engineBestMoveUCIRef.current);
       const correct = !!(isMasterMove || isEngineMove);
 
       console.log(`[Puzzle] User: ${userMoveSan} (${userMoveUCI}), Game: ${masterMove}, Engine: ${engineBestMoveUCI}, Correct: ${correct}`);
@@ -701,9 +704,9 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
         setReviewIndex(0);
         let currentStep = 0;
         const totalMoves = fullGameFens.length - 1;
-        
+
         if (replayIntervalRef.current) clearInterval(replayIntervalRef.current);
-        
+
         replayIntervalRef.current = setInterval(() => {
           currentStep++;
           setReviewIndex(currentStep);
@@ -778,85 +781,81 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
           flexDirection: 'column',
           alignItems: 'center',
         }}>
-          <div className="chess-board-container" style={{ display: 'flex', width: '100%', flexDirection: isMobile ? 'column-reverse' : 'row', alignItems: 'center', overflow: 'hidden' }}>
-            {/* Eval Bar Container */}
-            <div
-              className="eval-bar-wrapper"
-              style={{
-                width: isMobile ? '100%' : '2%',
-                height: isMobile ? '12px' : 'auto',
-                marginLeft: isMobile ? '0' : '0.5rem',
-                marginBottom: isMobile ? '0.5rem' : '0rem'
-              }}
-            >
-              <div
-                className="eval-bar-bg"
-                style={{
-                  display: 'flex',
-                  flexDirection: isMobile ? 'row' : 'column',
-                  justifyContent: 'flex-start',
-                  height: '100%',
-                  width: '100%',
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                  borderRadius: '4px',
-                  overflow: 'hidden'
-                }}
-              >
-                <div
-                  className="eval-bar-fill"
-                  style={{
-                    height: isMobile ? '100%' : `${50 + (evalNum / 100) * 50}%`,
-                    width: isMobile ? `${50 + (evalNum / 100) * 50}%` : '100%',
-                    backgroundColor: 'white',
-                    transition: 'all 0.4s ease'
-                  }}
-                />
-              </div>
-            </div>
+          <div className="chess-board-container" style={{ display: 'flex', width: '100%', flexDirection: 'column', alignItems: 'center', overflow: 'hidden', gap: '6px' }}>
 
             {/* Board */}
             <div
-              style={{ flex: 1, width: '100%', maxWidth: '100vw' }}
+              style={{ width: '100%', maxWidth: '100vw' }}
               className={boardShake ? 'board-shake' : ''}
             >
               {(() => {
                 const Board = Chessboard as any;
-                // After result: show green master move arrow + yellow engine arrow separately
+
                 const arrows = reviewIndex !== null
-                  ? [] // No arrows during full game review
+                  ? []
                   : showResult
-                    ? [
-                      ...masterMoveArrow,
-                      ...engineArrows.map((a: any) => ({ ...a, color: 'rgba(250, 21, 21, 0.85)' }))
-                    ]
+                    ? (() => {
+                      const masterMap = new Map(
+                        masterMoveArrow.map((a: any) => [
+                          `${a.startSquare}-${a.endSquare}`,
+                          { ...a, key: `master-${a.startSquare}-${a.endSquare}`, color: 'rgba(255, 255, 255, 0.9)' }
+                        ])
+                      );
+                      engineArrows.forEach((e: any) => {
+                        const k = `${e.startSquare}-${e.endSquare}`;
+                        if (masterMap.has(k)) {
+                          masterMap.set(k, { ...masterMap.get(k), color: 'rgba(255, 150, 180, 0.95)', key: `agree-${k}` });
+                        } else {
+                          masterMap.set(k, { ...e, color: 'rgba(250, 21, 21, 0.85)', key: `engine-${k}` });
+                        }
+                      });
+                      return Array.from(masterMap.values());
+                    })()
                     : [];
-                return <Board
-                  options={{
-                    position: reviewIndex !== null ? fullGameFens[reviewIndex] : gameRef.current.fen(),
-                    onPieceDrop: (reviewIndex !== null || showResult) ? undefined : onPieceDrop,
-                    boardOrientation: (() => {
-                      const base = currentPosition?.turn === 'black' ? 'black' : 'white';
-                      if (!isFlipped) return base;
-                      return base === 'white' ? 'black' : 'white';
-                    })(),
-                    pieces: calientePieces,
-                    darkSquareStyle: boardStyles.darkSquareStyle,
-                    lightSquareStyle: boardStyles.lightSquareStyle,
-                    boardStyle: {
-                      ...boardStyles.boardStyle,
-                      borderRadius: '4px',
-                      boxShadow: showResult
-                        ? isCorrect
-                          ? '0 0 0 3px rgba(255, 255, 255, 0.5), 0 8px 30px rgba(0,0,0,0.5)'
-                          : '0 0 0 3px rgba(239,68,68,0.4), 0 8px 30px rgba(0,0,0,0.5)'
-                        : '0 8px 30px rgba(0,0,0,0.5)'
-                    },
-                    showNotation: false,
-                    arrows
-                  }}
-                />;
+
+                return (
+                  <Board
+                    options={{
+                      position: reviewIndex !== null ? fullGameFens[reviewIndex] : gameRef.current.fen(),
+                      onPieceDrop: (reviewIndex !== null || showResult) ? undefined : onPieceDrop,
+                      boardOrientation: (() => {
+                        const base = currentPosition?.turn === 'black' ? 'black' : 'white';
+                        if (!isFlipped) return base;
+                        return base === 'white' ? 'black' : 'white';
+                      })(),
+                      pieces: calientePieces,
+                      darkSquareStyle: boardStyles.darkSquareStyle,
+                      lightSquareStyle: boardStyles.lightSquareStyle,
+                      boardStyle: {
+                        ...boardStyles.boardStyle,
+                        borderRadius: '4px',
+                        boxShadow: showResult
+                          ? isCorrect
+                            ? '0 0 0 3px rgba(255,255,255,0.5), 0 8px 30px rgba(0,0,0,0.5)'
+                            : '0 0 0 3px rgba(239,68,68,0.4), 0 8px 30px rgba(0,0,0,0.5)'
+                          : '0 8px 30px rgba(0,0,0,0.5)',
+                      },
+                      showNotation: false,
+                      arrows,
+                    }}
+                  />
+                );
               })()}
             </div>
+
+            {/* Eval bar — always horizontal, always below board, no height magic needed */}
+            <div style={{ width: '100%', height: '10px', borderRadius: '5px', overflow: 'hidden', backgroundColor: 'rgba(255, 255, 255, 0.2)' }}>
+              <div
+                style={{
+                  height: '100%',
+                  // White portion fills from left; 50% = equal, >50% = white winning
+                  width: `${Math.min(100, Math.max(0, 50 + (evalNum / 2000) * 50))}%`,
+                  backgroundColor: 'white',
+                  transition: 'width 0.4s ease',
+                }}
+              />
+            </div>
+
           </div>
 
           {/* Board Controls */}
@@ -1080,7 +1079,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 {reviewIndex !== null && (
-                  <button 
+                  <button
                     onClick={() => setIsFlipped(!isFlipped)}
                     title="Flip Board"
                     style={{
@@ -1091,7 +1090,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                     <RefreshCw size={16} />
                   </button>
                 )}
-                <button 
+                <button
                   onClick={() => {
                     if (replayIntervalRef.current) {
                       clearInterval(replayIntervalRef.current);
@@ -1119,7 +1118,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                     {positionIndex + 1}/{game.puzzle_positions.length}
                   </span>
                 )}
-                <button 
+                <button
                   onClick={() => {
                     if (replayIntervalRef.current) {
                       clearInterval(replayIntervalRef.current);
@@ -1190,12 +1189,12 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                   <GitMerge size={14} />
                   <span>Full Game PGN</span>
                 </div>
-                <div style={{ 
-                  backgroundColor: 'rgba(0,0,0,0.3)', 
-                  padding: '1rem', 
-                  borderRadius: '8px', 
-                  fontSize: '0.8rem', 
-                  fontFamily: 'monospace', 
+                <div style={{
+                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontFamily: 'monospace',
                   lineHeight: '1.5',
                   maxHeight: '200px',
                   overflowY: 'auto',
@@ -1251,7 +1250,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
 
       {/* Finish Celebration Overlay */}
       {showFinishCelebration && (
-        <div 
+        <div
           onClick={() => setShowFinishCelebration(false)}
           style={{
             position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
@@ -1408,7 +1407,7 @@ export default function PuzzleInterface({ game: initialGame, positionIndex: init
                     Move {Math.ceil(importMoveLimit / 2)}{importMoveLimit % 2 === 1 ? 'w' : 'b'} ({importMoveLimit} plies)
                   </span>
                 </div>
-                <input 
+                <input
                   type="range"
                   min="1"
                   max={fullGameMoves.length}

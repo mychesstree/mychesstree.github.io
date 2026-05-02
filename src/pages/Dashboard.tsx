@@ -246,16 +246,18 @@ export default function Dashboard() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate tree name
-    const nameRegex = /^[a-zA-Z0-9]{3,10}$/;
-    if (!nameRegex.test(newTitle)) {
-      showWarning('Tree name must be 3-10 alphanumeric characters (letters and numbers only)');
+    // Convert spaces to dashes and validate tree name
+    const sanitizedTitle = newTitle.replace(/\s+/g, '-');
+    const nameRegex = /^[a-zA-Z0-9-]{3,20}$/;
+    console.log('[DEBUG Dashboard] Tree title validation:', { original: newTitle, sanitized: sanitizedTitle, regex: nameRegex.test(sanitizedTitle) });
+    if (!nameRegex.test(sanitizedTitle)) {
+      showWarning('Tree name must be 3-20 alphanumeric characters (letters, numbers, and dashes only)');
       return;
     }
 
     const newTree = {
       id: crypto.randomUUID(),
-      title: newTitle,
+      title: sanitizedTitle,
       color: newColor,
       created_at: new Date().toISOString(),
       tree_data: {
@@ -276,7 +278,7 @@ export default function Dashboard() {
       .from('trees')
       .insert({
         user_id: user.id,
-        title: newTitle,
+        title: sanitizedTitle,
         color: newColor,
         tree_data: newTree.tree_data
       })

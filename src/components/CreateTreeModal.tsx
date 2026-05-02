@@ -111,9 +111,15 @@ export default function CreateTreeModal({
             <input
               type="text"
               className="input"
-              placeholder="E.g., Caro-Kann Defense"
+              placeholder="E.g., Caro-Kann-Defense"
               value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
+              onChange={(e) => setNewTitle(e.target.value.replace(/\s+/g, '-'))}
+              onKeyDown={(e) => {
+                if (e.key === ' ') {
+                  e.preventDefault();
+                  setNewTitle(newTitle + '-');
+                }
+              }}
               required
               autoFocus
             />
