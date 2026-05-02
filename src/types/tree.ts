@@ -15,4 +15,5 @@ export interface TreeNode {
   // Node information fields
   title?: string; // Limited to 20 characters
   description?: string; // Limited to 100 characters
+  quality?: 'blunder' | 'mistake' | 'good' | 'great';
 }

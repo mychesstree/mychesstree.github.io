@@ -94,7 +94,7 @@ function findParentByFen(node: TreeNode, targetFen: string, parent: TreeNode | n
  */
 function computeTreeLayout(
   root: TreeNode,
-  containerWidth: number,
+  
   containerHeight: number,
   visibleFens: Set<string>
 ): Map<string, { x: number; y: number }> {
@@ -213,7 +213,7 @@ export default function ForceTree({
     collectVisible(currentTree);
 
     // 2. Tangle-free layout
-    const treePositions = computeTreeLayout(currentTree, containerWidth, height, visibleFens);
+    const treePositions = computeTreeLayout(currentTree, height, visibleFens);
 
     // 3. Build node/link arrays
     const nodes: any[] = [];
@@ -344,15 +344,7 @@ export default function ForceTree({
       .attr('fill', '#fff').attr('pointer-events', 'none')
       .style('text-shadow', '0 1px 2px rgba(0,0,0,0.8)');
 
-    // Quality badge (e.g. "??" / "!" ) below the node
-    node.filter((d: any) => !!d.quality).append('text')
-      .text((d: any) => QUALITY_LABEL[d.quality as NonNullable<Quality>])
-      .attr('dx', 0).attr('dy', 22).attr('text-anchor', 'middle')
-      .attr('font-size', 11).attr('font-weight', 'bold')
-      .attr('fill', (d: any) => QUALITY_COLOR[d.quality as NonNullable<Quality>])
-      .attr('pointer-events', 'none')
-      .style('text-shadow', '0 1px 3px rgba(0,0,0,0.9)');
-
+    
     // 7. Drag
     node.call(d3.drag<SVGGElement, any>()
       .on('start', function(_e, d) {

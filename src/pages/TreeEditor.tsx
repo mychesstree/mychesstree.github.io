@@ -847,12 +847,12 @@ export default function TreeEditor() {
     }
   }, [tempTreeData, hasUnsavedChanges, addToHistory, currentFen]);
 
-  const handleNodeUpdate = useCallback((nodeFen: string, title: string, description: string) => {
+  const handleNodeUpdate = useCallback((nodeFen: string, title: string, description: string, quality?: TreeNode['quality']) => {
     if (!treeData) return;
 
     const updateNodeInfo = (node: TreeNode): TreeNode => {
       if (node.fen === nodeFen) {
-        return { ...node, title, description };
+        return { ...node, title, description, quality };
       }
       return {
         ...node,
