@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Info, Edit2, X } from 'lucide-react';
 import type { TreeNode } from '../types/tree';
-import { getOpeningName } from '../utils/openingTheory';
+import { getOpeningName, useOpeningTheory } from '../utils/openingTheory';
 
 interface NodeInfoProps {
   node: TreeNode;
@@ -10,6 +10,7 @@ interface NodeInfoProps {
 }
 
 export default function NodeInfo({ node, onUpdate, compact = false }: NodeInfoProps) {
+  useOpeningTheory();
   const [isEditing, setIsEditing] = useState(false);
   const opening = getOpeningName(node.fen);
   const [title, setTitle] = useState(node.title || (opening ? opening.substring(0, 20) : ''));

@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 import { GitBranchPlus, GitBranch, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Info, X, Navigation } from 'lucide-react';
 import TooltipButton from './TooltipButton';
 import { findParentWithMultipleChildren, countNodes } from '../utils/treeUtils';
-import { getOpeningName, isTheoryPosition } from '../utils/openingTheory';
+import { getOpeningName, isTheoryPosition, useOpeningTheory } from '../utils/openingTheory';
 
 export interface TreeNode {
   fen: string;
@@ -117,7 +117,15 @@ function computeTreeLayout(
 
   const positions = new Map<string, { x: number; y: number }>();
   laid.each((d: any) => {
-    positions.set(d.data.id, { x: 80 + d.y, y: d.x + verticalOffset });
+    let customX = 80;
+    for (let i = 1; i <= d.depth; i++) {
+      if (i % 2 === 0) {
+        customX += NODE_SEP_X * 0.5; // Black responses are closer
+      } else {
+        customX += NODE_SEP_X;
+      }
+    }
+    positions.set(d.data.id, { x: customX, y: d.x + verticalOffset });
   });
   return positions;
 }
@@ -126,6 +134,7 @@ function computeTreeLayout(
 export default function ForceTree({
   data, currentFen, onNodeClick, onNodeUpdate, isDeleteMode, tempTreeData, isFullscreen,
 }: ForceTreeProps) {
+  useOpeningTheory();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const savedTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
@@ -283,6 +292,41 @@ export default function ForceTree({
 
     const posLookup = new Map(nodes.map(n => [n.id, n]));
 
+    // 4.5. Background Dotted Lines entering 5th and 10th move
+    const NODE_SEP_X = 160;
+    const minNodeY = d3.min(nodes, n => n.y) ?? 0;
+    const maxNodeY = d3.max(nodes, n => n.y) ?? height;
+
+    // Move 5 (after 4 full moves)
+    const depth8_x = 80 + 4 * NODE_SEP_X + 4 * (NODE_SEP_X * 0.5);
+    const line5X = depth8_x + NODE_SEP_X * 0.6;
+
+    g.append('line')
+      .attr('x1', line5X)
+      .attr('y1', minNodeY - 2000)
+      .attr('x2', line5X)
+      .attr('y2', maxNodeY + 2000)
+      .attr('stroke', 'var(--text-muted)')
+      .attr('stroke-dasharray', '8,8')
+      .attr('stroke-width', 2)
+      .attr('opacity', 0.3)
+      .lower();
+
+    // Move 10 (after 9 full moves)
+    const depth18_x = 80 + 9 * NODE_SEP_X + 9 * (NODE_SEP_X * 0.5);
+    const line10X = depth18_x + NODE_SEP_X * 0.6;
+
+    g.append('line')
+      .attr('x1', line10X)
+      .attr('y1', minNodeY - 2000)
+      .attr('x2', line10X)
+      .attr('y2', maxNodeY + 2000)
+      .attr('stroke', 'var(--text-muted)')
+      .attr('stroke-dasharray', '8,8')
+      .attr('stroke-width', 2)
+      .attr('opacity', 0.3)
+      .lower();
+
     // 5. Links
     const link = g.append('g').selectAll('line').data(links).enter().append('line')
       .attr('x1', (d: any) => posLookup.get(d.source)?.x ?? 0)
@@ -376,9 +420,9 @@ export default function ForceTree({
       })
     );
 
-    // 8. Float animation
-    const AMPLITUDE = 2.5;
-    const SPEED = 0.0004;
+    // 8. Float animation (disabled)
+    const AMPLITUDE = 0;
+    const SPEED = 0.0008;
     let rafId: number;
     const tick = (t: number) => {
       node.each(function(d: any) {

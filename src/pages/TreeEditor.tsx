@@ -345,7 +345,85 @@ export default function TreeEditor() {
   const [bestMove, setBestMove] = useState('');
 
   // Arrows
-  // const boardWrapperRef = useRef<HTMLDivElement>(null);
+  const boardWrapperRef = useRef<HTMLDivElement>(null);
+  const [drawingArrow, setDrawingArrow] = useState<{ startSquare: string, color: string } | null>(null);
+
+  const getSquareFromEvent = useCallback((e: MouseEvent) => {
+    if (!boardWrapperRef.current) return null;
+    const rect = boardWrapperRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+    const sqSize = rect.width / 8;
+    const col = Math.floor(x / sqSize);
+    const row = Math.floor(y / sqSize);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return null;
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
+    const orient = treeMeta?.color === 'black' ? 'black' : 'white';
+    if (orient === 'black') {
+      return files[7 - col] + ranks[7 - row];
+    }
+    return files[col] + ranks[row];
+  }, [treeMeta?.color]);
+
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      const sq = getSquareFromEvent(e);
+      if (sq) {
+        let color = '#ec4899';
+        if (e.shiftKey) color = '#f97316';
+        else if (e.altKey || e.ctrlKey || e.metaKey) color = '#ef4444';
+        setDrawingArrow({ startSquare: sq, color });
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      if (drawingArrow) {
+        const sq = getSquareFromEvent(e);
+        if (sq && sq !== drawingArrow.startSquare) {
+          const newArrow = { from: drawingArrow.startSquare, to: sq, color: drawingArrow.color, brush: 'normal' };
+          setTreeData(prev => {
+            if (!prev) return prev;
+            const cloned = JSON.parse(JSON.stringify(prev));
+            const node = findNode(cloned, currentFen);
+            if (node) {
+              if (!node.shapes) node.shapes = [];
+              const existingIdx = node.shapes.findIndex((s: any) => s.from === newArrow.from && s.to === newArrow.to);
+              if (existingIdx !== -1) {
+                if (node.shapes[existingIdx].color === newArrow.color) {
+                  node.shapes.splice(existingIdx, 1);
+                } else {
+                  node.shapes[existingIdx] = newArrow;
+                }
+              } else {
+                node.shapes.push(newArrow);
+              }
+            }
+            return cloned;
+          });
+          setHasPending(true);
+        }
+        setDrawingArrow(null);
+      }
+    };
+
+    const wrapper = boardWrapperRef.current;
+    if (wrapper) {
+      wrapper.addEventListener('mousedown', handleMouseDown);
+      window.addEventListener('mouseup', handleMouseUp);
+      wrapper.addEventListener('contextmenu', e => e.preventDefault());
+    }
+    return () => {
+      if (wrapper) {
+        wrapper.removeEventListener('mousedown', handleMouseDown);
+        wrapper.removeEventListener('contextmenu', e => e.preventDefault());
+      }
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [drawingArrow, currentFen, getSquareFromEvent, treeData]);
 
   // ── Stockfish Local Worker ─────────────────────────────────────────────────
   useEffect(() => {
@@ -1228,9 +1306,16 @@ export default function TreeEditor() {
     ...arrow,
     key: arrow.id || `child-${arrow.startSquare}-${arrow.endSquare}-${index}`
   })) : [];
+  
+  const userArrows = (treeData ? findNode(treeData, currentFen)?.shapes || [] : []).map((s: any, index: number) => ({
+    startSquare: s.from,
+    endSquare: s.to,
+    color: s.color,
+    key: `user-${s.from}-${s.to}-${index}`
+  }));
 
   // Remove duplicate arrows based on start and end squares to prevent key conflicts
-  const uniqueArrows = [...engineArrows, ...childArrows].filter((arrow, index, self) =>
+  const uniqueArrows = [...userArrows, ...engineArrows, ...childArrows].filter((arrow, index, self) =>
     index === self.findIndex(a => a.startSquare === arrow.startSquare && a.endSquare === arrow.endSquare)
   );
   const arrows = uniqueArrows;
@@ -2065,7 +2150,7 @@ export default function TreeEditor() {
             )}
 
             {/* Board */}
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1 }} ref={boardWrapperRef}>
               {(() => {
                 const Board = Chessboard as any;
                 return <Board
