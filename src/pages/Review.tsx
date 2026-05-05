@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { ArrowLeft, CheckCircle, XCircle, Brain } from 'lucide-react';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import { useAuth } from '../hooks/useAuth';
+import LoadingScreen from '../components/LoadingScreen';
 
 interface TreeNode {
   fen: string;
@@ -23,39 +24,33 @@ interface ReviewCard {
   oldEase: number;
 }
 
-// ── SM-2 Spaced Repetition Logic ──────────────────────────────────────────────
 function calculateSM2(rating: number, oldInterval: number, oldRepetitions: number, oldEase: number) {
   let interval = 1;
   let repetitions = 0;
   let ease = oldEase;
 
-  // 1. Learning phase (first time graduating)
   if (oldInterval === 0) {
-    if (rating === 3) interval = 1;      // Good (1 day)
-    else if (rating === 5) interval = 4; // Easy (4 days)
+    if (rating === 3) interval = 1;
+    else if (rating === 5) interval = 4;
     else interval = 1;
     repetitions = 1;
   } else {
-    // 2. Review phase (graduated)
     if (rating >= 3) {
       if (oldInterval === 4 && rating === 3) {
-        // Special case to match Anki's behavior where 4d -> 16d
         interval = 16;
       } else if (oldInterval === 4 && rating === 5) {
-        interval = 24; 
+        interval = 24;
       } else {
         const bonus = rating === 5 ? 1.3 : 1.0;
         interval = Math.max(oldInterval + 1, Math.round(oldInterval * oldEase * bonus));
       }
       repetitions = oldRepetitions + 1;
     } else {
-      // Again/Hard back to learning
       repetitions = 1;
       interval = 1;
     }
   }
 
-  // Standard SM-2 ease adjustment
   ease = oldEase + (0.1 - (5 - rating) * (0.08 + (5 - rating) * 0.02));
   if (ease < 1.3) ease = 1.3;
   return { interval, repetitions, ease };
@@ -66,6 +61,13 @@ function formatInterval(days: number) {
   if (days < 30) return `${days}d`;
   if (days < 365) return `${Math.round(days / 30 * 10) / 10}mo`;
   return `${Math.round(days / 365 * 10) / 10}y`;
+}
+
+// Helper to load a card onto the board
+function loadCard(card: ReviewCard, gameRef: React.MutableRefObject<Chess>, setCurrentFen: (f: string) => void, setExpectedMove: (m: string) => void) {
+  gameRef.current = new Chess(card.fen);
+  setCurrentFen(card.fen);
+  setExpectedMove(card.mainMove);
 }
 
 export default function Review() {
@@ -86,49 +88,48 @@ export default function Review() {
 
   const loadTreeAndGenerateCards = useCallback(async () => {
     if (!id) return;
+    setLoading(true);
+    setCurrentIndex(0);
+    setStatus('playing');
+    setRevealed(false);
 
-    // 1. Fetch metadata and tree data
     let tree;
     if (isGuest) {
       tree = getGuestTree(id);
-      if (!tree) {
-        setLoading(false);
-        return;
-      }
+      if (!tree) { setLoading(false); return; }
     } else {
       const { data: treeData, error: treeErr } = await supabase.from('trees').select('*').eq('id', id).maybeSingle();
-      if (treeErr || !treeData) {
-        console.error('Tree loading error in Review:', treeErr);
-        setLoading(false);
-        return;
-      }
+      if (treeErr || !treeData) { setLoading(false); return; }
       tree = treeData;
     }
     setTreeMeta(tree);
 
-    // 2. Fetch existing reviews to determine what's due
-    let reviewMap: Map<string, { date: Date, interval: number, repetitions: number, ease: number }> = new Map();
+    let reviewMap: Map<string, { date: Date; interval: number; repetitions: number; ease: number }> = new Map();
     if (isGuest) {
       const reviews = loadGuestReviews(id);
-      reviewMap = new Map(reviews.map(r => [r.fen, { 
-        date: new Date(r.next_review_date), 
-        interval: r.interval, 
-        repetitions: r.repetitions, 
-        ease: r.ease_factor 
+      reviewMap = new Map(reviews.map(r => [r.fen, {
+        date: new Date(r.next_review_date),
+        interval: r.interval,
+        repetitions: r.repetitions,
+        ease: r.ease_factor
       }]));
     } else {
-      const { data: reviews } = await supabase.from('reviews').select('fen, next_review_date, interval, repetitions, ease_factor').eq('tree_id', id);
-      reviewMap = new Map(reviews?.map(r => [r.fen, { 
-        date: new Date(r.next_review_date), 
-        interval: r.interval, 
-        repetitions: r.repetitions, 
-        ease: r.ease_factor 
+      const { data: reviews } = await supabase
+        .from('reviews')
+        .select('fen, next_review_date, interval, repetitions, ease_factor')
+        .eq('tree_id', id);
+      reviewMap = new Map(reviews?.map(r => [r.fen, {
+        date: new Date(r.next_review_date),
+        interval: r.interval,
+        repetitions: r.repetitions,
+        ease: r.ease_factor
       }]) || []);
     }
 
     const tData = tree.tree_data;
     const allMatchingCards: ReviewCard[] = [];
     const isPlayerWhite = tree.color === 'white';
+    const now = new Date();
 
     function traverse(node: TreeNode) {
       const chess = new Chess(node.fen);
@@ -136,9 +137,8 @@ export default function Review() {
       const isSideToMatch = isPlayerWhite ? isWhiteTurn : !isWhiteTurn;
 
       if (isSideToMatch && node.children && node.children.length > 0) {
-        // FILTER: Only add if new OR due
         const reviewData = reviewMap.get(node.fen);
-        const isDue = !reviewData || reviewData.date <= new Date();
+        const isDue = !reviewData || reviewData.date <= now;
 
         if (isDue) {
           allMatchingCards.push({
@@ -153,22 +153,16 @@ export default function Review() {
         }
       }
 
-      if (node.children) {
-        node.children.forEach(child => traverse(child));
-      }
+      node.children?.forEach(child => traverse(child));
     }
 
     if (tData) traverse(tData);
 
-    // Shuffle the due cards
     const shuffled = allMatchingCards.sort(() => Math.random() - 0.5);
     setFlashcards(shuffled);
 
     if (shuffled.length > 0) {
-      const startPos = shuffled[0];
-      gameRef.current = new Chess(startPos.fen);
-      setCurrentFen(startPos.fen);
-      setExpectedMove(startPos.mainMove);
+      loadCard(shuffled[0], gameRef, setCurrentFen, setExpectedMove);
     }
     setLoading(false);
   }, [id, isGuest, getGuestTree, loadGuestReviews]);
@@ -197,64 +191,35 @@ export default function Review() {
         setExpectedMove(currentCard.mainMove);
       }
       return true;
-    } catch (e) {
+    } catch {
       return false;
     }
   };
 
-  const submitRating = async (rating: number) => {
-    if (!treeMeta || !flashcards[currentIndex]) return;
-    const card = flashcards[currentIndex];
+  const saveReview = async (card: ReviewCard, rating: number) => {
+    const { interval, repetitions, ease } = calculateSM2(rating, card.oldInterval, card.oldRepetitions, card.oldEase);
+    const nextReview = new Date();
+    nextReview.setDate(nextReview.getDate() + interval);
 
     if (isGuest) {
-      // Guest user - use localStorage
-      if (rating === 1 || rating === 2) {
-        // "Again" (1) or "Hard" (2) -> Re-queue at the end of the session
-        handleSessionRequeue();
-      } else {
-        // "Medium" (3) or "Easy" (5) -> Save to localStorage
-        const oldInt = card.oldInterval;
-        const oldRep = card.oldRepetitions;
-        const oldEase = card.oldEase;
-
-        const { interval, repetitions, ease } = calculateSM2(rating, oldInt, oldRep, oldEase);
-        const nextReview = new Date();
-        nextReview.setDate(nextReview.getDate() + interval);
-
-        saveGuestReview({
-          fen: card.fen,
-          tree_id: card.treeId,
-          interval,
-          repetitions,
-          ease_factor: ease,
-          next_review_date: nextReview.toISOString()
-        });
-
-        nextCard();
-      }
-    } else {
-      // Signed-in user - use Supabase
-      // Always log history for accurate heatmap
-      await supabase.from('review_logs').insert({
-        tree_id: card.treeId,
-        user_id: treeMeta.user_id,
+      saveGuestReview({
         fen: card.fen,
-        rating
+        tree_id: card.treeId,
+        interval,
+        repetitions,
+        ease_factor: ease,
+        next_review_date: nextReview.toISOString()
       });
-      if (rating === 1 || rating === 2) {
-        // "Again" (1) or "Hard" (2) -> Re-queue at the end of the session
-        handleSessionRequeue();
-      } else {
-        // "Medium" (3) or "Easy" (5) -> Graduate to Supabase (>= 1 day)
-        const oldInt = card.oldInterval;
-        const oldRep = card.oldRepetitions;
-        const oldEase = card.oldEase;
-
-        const { interval, repetitions, ease } = calculateSM2(rating, oldInt, oldRep, oldEase);
-        const nextReview = new Date();
-        nextReview.setDate(nextReview.getDate() + interval);
-
-        await supabase.from('reviews').upsert({
+    } else {
+      // Fire both in parallel — log for heatmap, upsert for scheduling
+      await Promise.all([
+        supabase.from('review_logs').insert({
+          tree_id: card.treeId,
+          user_id: treeMeta.user_id,
+          fen: card.fen,
+          rating
+        }),
+        supabase.from('reviews').upsert({
           tree_id: card.treeId,
           user_id: treeMeta.user_id,
           fen: card.fen,
@@ -262,45 +227,52 @@ export default function Review() {
           repetitions,
           ease_factor: ease,
           next_review_date: nextReview.toISOString()
+        }, { onConflict: 'user_id, tree_id, fen' })
+      ]);
+    }
+  };
+
+  const submitRating = async (rating: number) => {
+    if (!treeMeta || !flashcards[currentIndex]) return;
+    const card = flashcards[currentIndex];
+
+    if (rating <= 2) {
+      // Again / Hard: requeue at end of session, don't save to DB yet
+      // Log it for heatmap even on failure (signed-in only)
+      if (!isGuest) {
+        supabase.from('review_logs').insert({
+          tree_id: card.treeId,
+          user_id: treeMeta.user_id,
+          fen: card.fen,
+          rating
         });
-
-        nextCard();
       }
+
+      setFlashcards(prev => {
+        const next = [...prev];
+        const [removed] = next.splice(currentIndex, 1);
+        const requeued = [...next, removed];
+
+        // currentIndex now points to the next card (or wraps) — load it immediately
+        const nextCard = requeued[currentIndex] ?? requeued[0];
+        if (nextCard) loadCard(nextCard, gameRef, setCurrentFen, setExpectedMove);
+
+        return requeued;
+      });
+      setStatus('playing');
+      setRevealed(false);
+    } else {
+      // Good / Easy: save and advance
+      await saveReview(card, rating);
+      advanceToNextCard();
     }
   };
 
-  const handleSessionRequeue = () => {
-    setFlashcards(prev => {
-      const next = [...prev];
-      const [removed] = next.splice(currentIndex, 1);
-      return [...next, removed];
-    });
-    // The card at currentIndex is now the "next" one in the original queue
-    // but the state needs to be refreshed
-    setRevealed(false);
-    setStatus('playing');
-    // We need to wait for state update to get the new flashcards[currentIndex]? 
-    // No, we can just use the next item in the array for the immediate UI update
-  };
-
-  // Update UI when flashcards or currentIndex change
-  useEffect(() => {
-    if (flashcards[currentIndex]) {
-      const card = flashcards[currentIndex];
-      gameRef.current = new Chess(card.fen);
-      setCurrentFen(card.fen);
-      setExpectedMove(card.mainMove);
-    }
-  }, [currentIndex, flashcards]);
-
-  const nextCard = () => {
+  const advanceToNextCard = () => {
     const nextIdx = currentIndex + 1;
     if (nextIdx < flashcards.length) {
       setCurrentIndex(nextIdx);
-      const nextPos = flashcards[nextIdx];
-      gameRef.current = new Chess(nextPos.fen);
-      setCurrentFen(nextPos.fen);
-      setExpectedMove(nextPos.mainMove);
+      loadCard(flashcards[nextIdx], gameRef, setCurrentFen, setExpectedMove);
       setStatus('playing');
       setRevealed(false);
     } else {
@@ -309,162 +281,119 @@ export default function Review() {
   };
 
   const handleRetry = () => {
-    const currentCard = flashcards[currentIndex];
-    gameRef.current = new Chess(currentCard.fen);
-    setCurrentFen(currentCard.fen);
+    loadCard(flashcards[currentIndex], gameRef, setCurrentFen, setExpectedMove);
     setStatus('playing');
     setRevealed(false);
   };
 
-  if (loading) return <div className="p-8 text-center text-muted">Loading review...</div>;
-  if (!treeMeta) return <div className="p-8 text-center">Tree not found.</div>;
-
-  if (flashcards.length === 0) return (
-    <div className="card text-center m-8 p-12" style={{ maxWidth: 500, margin: '4rem auto' }}>
-      <CheckCircle size={48} color="var(--success)" style={{ marginBottom: '1rem' }} />
-      <h2>Review Complete!</h2>
-      <p className="text-muted" style={{ marginTop: '0.5rem' }}>You've reviewed all available moves for this session.</p>
-      <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'center' }}>
-        <button onClick={() => navigate('/')} className="btn btn-secondary">Dashboard</button>
-        <button onClick={() => loadTreeAndGenerateCards()} className="btn">Start Over</button>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="review-layout">
-      <div className="review-board-container">
-        <div className="card" style={{ padding: '0rem', position: 'relative', overflow: 'hidden', marginTop: '3rem' }}>
-          {(() => {
-            const Board = Chessboard as any;
-            return <Board
-              options={{
-                position: currentFen,
-                onPieceDrop: onDrop,
-                boardOrientation: treeMeta.color,
-                pieces: calientePieces,
-                darkSquareStyle: boardStyles.darkSquareStyle,
-                lightSquareStyle: boardStyles.lightSquareStyle,
-                boardStyle: boardStyles.boardStyle,
-              }}
-            />;
-          })()}
-        </div>
-      </div>
+    <>
+      <LoadingScreen isLoading={loading} />
 
-      <div className="review-info-container">
-        <div className="card" style={{ width: '100%', minHeight: 280, display: 'flex', flexDirection: 'column', padding: '1rem' }}>
-          {/* Header elements moved inside the card */}
-          <div style={{ display: 'flex', width: '100%', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-            <button
-              onClick={() => navigate(`/editor/${id}`)}
-              className="btn btn-secondary btn-icon"
-              title="Back to Editor"
-              style={{ borderRadius: 'var(--radius-md)' }}
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div style={{ paddingLeft: '1rem', justifyContent: 'left' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', lineHeight: 1.2 }}>{treeMeta.title}</h3>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Position {currentIndex + 1} / {flashcards.length}
-              </div>
+      {!loading && !treeMeta && (
+        <div className="p-8 text-center">Tree not found.</div>
+      )}
+
+      {!loading && treeMeta && flashcards.length === 0 && (
+        <div className="card text-center m-8 p-12" style={{ maxWidth: 500, margin: '4rem auto' }}>
+          <CheckCircle size={48} color="var(--success)" style={{ marginBottom: '1rem' }} />
+          <h2>Review Complete!</h2>
+          <p className="text-muted" style={{ marginTop: '0.5rem' }}>You've reviewed all available moves for this session.</p>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'center' }}>
+            <button onClick={() => navigate('/')} className="btn btn-secondary">Dashboard</button>
+            <button onClick={() => loadTreeAndGenerateCards()} className="btn">Start Over</button>
+          </div>
+        </div>
+      )}
+
+      {!loading && treeMeta && flashcards.length > 0 && (
+        <div className="review-layout">
+          <div className="review-board-container">
+            <div className="card" style={{ padding: '0rem', position: 'relative', overflow: 'hidden', marginTop: '3rem' }}>
+              {(() => {
+                const Board = Chessboard as any;
+                return <Board options={{
+                  position: currentFen,
+                  onPieceDrop: onDrop,
+                  boardOrientation: treeMeta.color,
+                  pieces: calientePieces,
+                  darkSquareStyle: boardStyles.darkSquareStyle,
+                  lightSquareStyle: boardStyles.lightSquareStyle,
+                  boardStyle: boardStyles.boardStyle,
+                }} />;
+              })()}
             </div>
           </div>
 
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            {!revealed ? (
-              <div style={{ textAlign: 'center' }}>
-                <Brain className="text-accent" size={32} style={{ marginBottom: '1rem', opacity: 0.9 }} />
-                <p style={{ fontSize: '1.4rem', fontWeight: 600, margin: 0 }}>
-                  Your move for <span style={{ color: 'var(--accent-color)', textTransform: 'capitalize' }}>{treeMeta.color}</span>
-                </p>
-              </div>
-            ) : (
-              <div className="animate-fade-in" style={{ width: '100%', textAlign: 'center' }}>
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: status === 'correct' ? 'var(--success)' : 'var(--error)', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 700 }}>
-                    {status === 'correct' ? <CheckCircle size={22} /> : <XCircle size={22} />}
-                    {status === 'correct' ? 'Correct!' : 'Incorrect'}
+          <div className="review-info-container">
+            <div className="card" style={{ width: '100%', minHeight: 280, display: 'flex', flexDirection: 'column', padding: '1rem' }}>
+              <div style={{ display: 'flex', width: '100%', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+                <button
+                  onClick={() => navigate(`/editor/${id}`)}
+                  className="btn btn-secondary btn-icon"
+                  title="Back to Editor"
+                  style={{ borderRadius: 'var(--radius-md)' }}
+                >
+                  <ArrowLeft size={20} />
+                </button>
+                <div style={{ paddingLeft: '1rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', lineHeight: 1.2 }}>{treeMeta.title}</h3>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Position {currentIndex + 1} / {flashcards.length}
                   </div>
-                  {status === 'wrong' && <p className="text-muted text-sm">Correct move: <strong>{expectedMove}</strong></p>}
-                </div>
-
-                <div style={{
-                  display: 'flex',
-                  gap: '1rem',
-                  justifyContent: 'center',
-                  width: '100%',
-                  flexWrap: 'wrap'
-                }}>
-                  {status === 'wrong' ? (
-                    <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: '1 1 100%', padding: '1rem' }}>RETRY</button>
-                  ) : (() => {
-                    const card = flashcards[currentIndex];
-                    const goodCalc = calculateSM2(3, card.oldInterval, card.oldRepetitions, card.oldEase);
-                    const easyCalc = calculateSM2(5, card.oldInterval, card.oldRepetitions, card.oldEase);
-                    return (
-                    <>
-                      <button
-                        onClick={() => submitRating(1)}
-                        className="btn"
-                        style={{
-                          flex: '1 1 140px',
-                          backgroundColor: 'rgba(219, 39, 119, 0.1)',
-                          color: '#ec4899',
-                          padding: '1rem',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        AGAIN<br /><span style={{ opacity: 0.6, fontSize: '0.75rem' }}>1m</span>
-                      </button>
-                      <button
-                        onClick={() => submitRating(2)}
-                        className="btn"
-                        style={{
-                          flex: '1 1 140px',
-                          backgroundColor: 'rgba(219, 39, 119, 0.25)',
-                          color: '#fbcfe8',
-                          padding: '1rem',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        HARD<br /><span style={{ opacity: 0.8, fontSize: '0.75rem' }}>10m</span>
-                      </button>
-                      <button
-                        onClick={() => submitRating(3)}
-                        className="btn"
-                        style={{
-                          flex: '1 1 140px',
-                          backgroundColor: 'rgba(219, 39, 119, 0.6)',
-                          color: 'white',
-                          padding: '1rem',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        GOOD<br /><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>{formatInterval(goodCalc.interval)}</span>
-                      </button>
-                      <button
-                        onClick={() => submitRating(5)}
-                        className="btn"
-                        style={{
-                          flex: '1 1 140px',
-                          backgroundColor: '#9d174d',
-                          color: 'white',
-                          padding: '1rem',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        EASY<br /><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>{formatInterval(easyCalc.interval)}</span>
-                      </button>
-                    </>
-                  )})()}
                 </div>
               </div>
-            )}
+
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                {!revealed ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <Brain className="text-accent" size={32} style={{ marginBottom: '1rem', opacity: 0.9 }} />
+                    <p style={{ fontSize: '1.4rem', fontWeight: 600, margin: 0 }}>
+                      Your move for <span style={{ color: 'var(--accent-color)', textTransform: 'capitalize' }}>{treeMeta.color}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="animate-fade-in" style={{ width: '100%', textAlign: 'center' }}>
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: status === 'correct' ? 'var(--success)' : 'var(--error)', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 700 }}>
+                        {status === 'correct' ? <CheckCircle size={22} /> : <XCircle size={22} />}
+                        {status === 'correct' ? 'Correct!' : 'Incorrect'}
+                      </div>
+                      {status === 'wrong' && <p className="text-muted text-sm">Correct move: <strong>{expectedMove}</strong></p>}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', width: '100%', flexWrap: 'wrap' }}>
+                      {status === 'wrong' ? (
+                        <button onClick={handleRetry} className="btn btn-secondary" style={{ flex: '1 1 100%', padding: '1rem' }}>RETRY</button>
+                      ) : (() => {
+                        const card = flashcards[currentIndex];
+                        const goodCalc = calculateSM2(3, card.oldInterval, card.oldRepetitions, card.oldEase);
+                        const easyCalc = calculateSM2(5, card.oldInterval, card.oldRepetitions, card.oldEase);
+                        return (
+                          <>
+                            <button onClick={() => submitRating(1)} className="btn" style={{ flex: '1 1 140px', backgroundColor: 'rgba(219, 39, 119, 0.1)', color: '#ec4899', padding: '1rem', fontSize: '0.85rem' }}>
+                              AGAIN<br /><span style={{ opacity: 0.6, fontSize: '0.75rem' }}>1m</span>
+                            </button>
+                            <button onClick={() => submitRating(2)} className="btn" style={{ flex: '1 1 140px', backgroundColor: 'rgba(219, 39, 119, 0.25)', color: '#fbcfe8', padding: '1rem', fontSize: '0.85rem' }}>
+                              HARD<br /><span style={{ opacity: 0.8, fontSize: '0.75rem' }}>10m</span>
+                            </button>
+                            <button onClick={() => submitRating(3)} className="btn" style={{ flex: '1 1 140px', backgroundColor: 'rgba(219, 39, 119, 0.6)', color: 'white', padding: '1rem', fontSize: '0.85rem' }}>
+                              GOOD<br /><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>{formatInterval(goodCalc.interval)}</span>
+                            </button>
+                            <button onClick={() => submitRating(5)} className="btn" style={{ flex: '1 1 140px', backgroundColor: '#9d174d', color: 'white', padding: '1rem', fontSize: '0.85rem' }}>
+                              EASY<br /><span style={{ opacity: 0.9, fontSize: '0.75rem' }}>{formatInterval(easyCalc.interval)}</span>
+                            </button>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

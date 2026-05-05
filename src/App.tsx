@@ -16,12 +16,18 @@ import UpdatePassword from './pages/UpdatePassword';
 import TreeNotFound from './pages/TreeNotFound';
 import { useState } from 'react';
 
+import LoadingScreen from './components/LoadingScreen';
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isGuest, loading } = useAuth();
 
-  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading…</div>;
-  if (!user && !isGuest) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return (
+    <>
+      <LoadingScreen isLoading={loading} />
+      {!loading && !user && !isGuest && <Navigate to="/login" replace />}
+      {!loading && (user || isGuest) && children}
+    </>
+  );
 };
 
 // Global offline indicator component
