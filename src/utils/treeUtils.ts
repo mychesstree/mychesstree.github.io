@@ -12,6 +12,15 @@ export function findNode(node: TreeNode, fen: string): TreeNode | null {
   return null;
 }
 
+export function getNodeDepth(node: TreeNode, targetFen: string, currentDepth = 0): number | null {
+  if (node.fen === targetFen) return currentDepth;
+  for (const child of node.children) {
+    const depth = getNodeDepth(child, targetFen, currentDepth + 1);
+    if (depth !== null) return depth;
+  }
+  return null;
+}
+
 export function countNodes(node: TreeNode): number {
   let count = 1;
   for (const child of node.children) {

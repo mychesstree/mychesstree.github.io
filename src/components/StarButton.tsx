@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Star } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -34,6 +34,15 @@ export default function StarButton({
     lg: 20
   };
 
+  // Keep internal state in sync with props
+  useEffect(() => {
+    setIsStarred(initialIsStarred);
+  }, [initialIsStarred]);
+
+  useEffect(() => {
+    setCurrentStarCount(starCount);
+  }, [starCount]);
+
   const handleToggleStar = async () => {
     if (!user || loading) return;
 
@@ -41,7 +50,6 @@ export default function StarButton({
     try {
       if (isStarred) {
         // Unstar
-        console.log('Unstarring tree:', treeId);
         const { error } = await supabase
           .from('tree_stars')
           .delete()
@@ -49,32 +57,40 @@ export default function StarButton({
           .eq('user_id', user.id);
 
         if (error) {
-          showError('Failed to unstar tree');
+          // If already deleted or not found, just update UI
+          if (error.code === 'PGRST116') {
+            setIsStarred(false);
+            return;
+          }
           throw error;
         }
         
         setIsStarred(false);
-        setCurrentStarCount(prev => prev - 1);
-        onStarChange?.(currentStarCount - 1, false);
-        console.log('Unstarred successfully');
+        setCurrentStarCount(prev => Math.max(0, prev - 1));
+        onStarChange?.(Math.max(0, currentStarCount - 1), false);
       } else {
         // Star
-        console.log('Starring tree:', treeId);
         const { error } = await supabase
           .from('tree_stars')
           .insert({ tree_id: treeId, user_id: user.id });
 
         if (error) {
-          showError('Failed to star tree');
+          // Handle conflict: already starred
+          if (error.code === '23505' || error.message.includes('unique constraint')) {
+            setIsStarred(true);
+            // Don't increment count here as it was already starred
+            onStarChange?.(currentStarCount, true);
+            return;
+          }
           throw error;
         }
         
         setIsStarred(true);
         setCurrentStarCount(prev => prev + 1);
         onStarChange?.(currentStarCount + 1, true);
-        console.log('Starred successfully');
       }
     } catch (error) {
+      console.error('Star error:', error);
       // Show user feedback if schema isn't applied
       if (error instanceof Error && error.message.includes('relation "tree_stars" does not exist')) {
         showError('Star feature not available yet');

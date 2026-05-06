@@ -33,6 +33,7 @@ CREATE OR REPLACE FUNCTION get_user_subscription(u_id UUID)
 RETURNS TABLE(
   tier TEXT,
   max_trees INTEGER,
+  max_depth INTEGER,
   tree_count INTEGER,
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT
@@ -45,6 +46,10 @@ BEGIN
       WHEN COALESCE(s.tier, 'free') = 'pro' THEN 999999
       ELSE 4
     END as max_trees,
+    CASE 
+      WHEN COALESCE(s.tier, 'free') = 'pro' THEN 36
+      ELSE 24
+    END as max_depth,
     COALESCE(su.tree_count, 0) as tree_count,
     s.stripe_customer_id,
     s.stripe_subscription_id

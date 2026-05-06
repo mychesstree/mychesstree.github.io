@@ -14,6 +14,7 @@ import type { TreeNode } from '../types/tree';
 import { calculateDuePositions } from '../utils/treeUtils';
 import { useToast } from '../components/Toast';
 import GuidedTour from '../components/GuidedTour';
+import LoadingScreen from '../components/LoadingScreen';
 
 interface Tree {
   id: string;
@@ -24,6 +25,7 @@ interface Tree {
   tree_data?: TreeNode;
   star_count?: number;
   is_starred?: boolean;
+  is_public?: boolean;
   users?: {
     username: string;
   } | {
@@ -131,13 +133,22 @@ export default function Dashboard() {
           .select('fen, next_review_date')
           .eq('tree_id', tree.id);
 
-        // Check if user has starred this tree
-        const { data: starData } = await supabase
-          .from('tree_stars')
-          .select('id')
-          .eq('tree_id', tree.id)
-          .eq('user_id', user.id)
-          .single();
+        // Check star status for owned trees ONLY if they are public
+        // to reduce DB load while still detecting stars on public repertoires
+        let isStarred = false;
+        if (tree.is_public && user) {
+          try {
+            const { data: starData } = await supabase
+              .from('tree_stars')
+              .select('id')
+              .eq('tree_id', tree.id)
+              .eq('user_id', user.id)
+              .maybeSingle();
+            isStarred = !!starData;
+          } catch (e) {
+            console.warn('Could not fetch star status for owned tree:', e);
+          }
+        }
 
         const dueCount = tree.tree_data
           ? calculateDuePositions(tree.tree_data, reviews || [], tree.color)
@@ -145,7 +156,7 @@ export default function Dashboard() {
         return {
           ...tree,
           cards_due: dueCount,
-          is_starred: !!starData
+          is_starred: isStarred
         };
       }));
       setTrees(treesWithDue);
@@ -168,22 +179,27 @@ export default function Dashboard() {
 
       if (error) throw error;
 
-      // Check star status for authenticated users
+      // Check star status for authenticated users only if needed
       if (user && data) {
-        const resultsWithStarStatus = await Promise.all(data.map(async (tree) => {
-          const { data: starData } = await supabase
-            .from('tree_stars')
-            .select('id')
-            .eq('tree_id', tree.id)
-            .eq('user_id', user.id)
-            .single();
+        try {
+          const resultsWithStarStatus = await Promise.all(data.map(async (tree) => {
+            const { data: starData, error: starError } = await supabase
+              .from('tree_stars')
+              .select('id')
+              .eq('tree_id', tree.id)
+              .eq('user_id', user.id)
+              .maybeSingle();
 
-          return {
-            ...tree,
-            is_starred: !!starData
-          };
-        }));
-        setSearchResults(resultsWithStarStatus);
+            return {
+              ...tree,
+              is_starred: !!starData && !starError
+            };
+          }));
+          setSearchResults(resultsWithStarStatus);
+        } catch (e) {
+          console.warn('Could not fetch star status:', e);
+          setSearchResults(data || []);
+        }
       } else {
         setSearchResults(data || []);
       }
@@ -216,20 +232,25 @@ export default function Dashboard() {
 
       // Check star status for authenticated users
       if (user && data) {
-        const treesWithStarStatus = await Promise.all(data.map(async (tree) => {
-          const { data: starData } = await supabase
-            .from('tree_stars')
-            .select('id')
-            .eq('tree_id', tree.id)
-            .eq('user_id', user.id)
-            .single();
+        try {
+          const treesWithStarStatus = await Promise.all(data.map(async (tree) => {
+            const { data: starData, error: starError } = await supabase
+              .from('tree_stars')
+              .select('id')
+              .eq('tree_id', tree.id)
+              .eq('user_id', user.id)
+              .maybeSingle();
 
-          return {
-            ...tree,
-            is_starred: !!starData
-          };
-        }));
-        return treesWithStarStatus;
+            return {
+              ...tree,
+              is_starred: !!starData && !starError
+            };
+          }));
+          return treesWithStarStatus;
+        } catch (e) {
+          console.warn('Could not fetch star status for top trees:', e);
+          return data || [];
+        }
       }
 
       return data || [];
@@ -459,10 +480,10 @@ export default function Dashboard() {
     setPuzzleRefreshTrigger(prev => prev + 1);
   };
 
-  if (loading) return <div>Loading trees...</div>;
 
   return (
     <>
+      <LoadingScreen isLoading={loading} />
       <CreateTreeModal
         isOpen={isCreating}
         onClose={() => setIsCreating(false)}
@@ -766,48 +787,56 @@ export default function Dashboard() {
                 <div>
                   <div className="flex items-center justify-between mb-4" style={{ position: 'relative' }}>
                     <h3 style={{ margin: 0, borderBottom: tree.color === 'white' ? '3px solid #fff' : '3px solid #777', display: 'inline-block', lineHeight: '1.4' }}>{tree.title}</h3>
-                    {/* Show star button in shared view, dropdown in owned view */}
-                    {(viewMode === 'shared' || searchQuery.trim()) ? (
-                      <StarButton
-                        treeId={tree.id}
-                        starCount={tree.star_count || 0}
-                        isStarred={tree.is_starred || false}
-                        onStarChange={(newStarCount, isStarred) => {
-                          // Update the tree in the local state
-                          if (searchQuery.trim()) {
-                            setSearchResults(prev => prev.map(t =>
-                              t.id === tree.id
-                                ? { ...t, star_count: newStarCount, is_starred: isStarred }
-                                : t
-                            ));
-                          } else {
-                            setTrees(prev => prev.map(t =>
-                              t.id === tree.id
-                                ? { ...t, star_count: newStarCount, is_starred: isStarred }
-                                : t
-                            ));
-                          }
-                        }}
-                        size="md"
-                      />
-                    ) : (
-                      <div style={{ position: 'relative' }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveDropdown(activeDropdown === tree.id ? null : tree.id);
+                    <div className="flex items-center gap-2">
+                      {/* Show star button if tree is public, or if in shared/search view */}
+                      {(tree.is_public || viewMode === 'shared' || searchQuery.trim()) && (
+                        <StarButton
+                          treeId={tree.id}
+                          starCount={tree.star_count || 0}
+                          isStarred={tree.is_starred || false}
+                          onStarChange={(newStarCount, isStarred) => {
+                            // Update the tree in the local state
+                            if (searchQuery.trim()) {
+                              setSearchResults(prev => prev.map(t =>
+                                t.id === tree.id
+                                  ? { ...t, star_count: newStarCount, is_starred: isStarred }
+                                  : t
+                              ));
+                            } else {
+                              setTrees(prev => prev.map(t =>
+                                t.id === tree.id
+                                  ? { ...t, star_count: newStarCount, is_starred: isStarred }
+                                  : t
+                              ));
+                            }
                           }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: '4px',
-                            cursor: 'pointer',
-                            color: 'var(--text-muted)',
-                            borderRadius: '4px'
-                          }}
-                        >
-                          <MoreHorizontal size={16} />
-                        </button>
+                          size="md"
+                        />
+                      )}
+
+                      {/* Show options menu for owned trees */}
+                      {viewMode === 'owned' && (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdown(activeDropdown === tree.id ? null : tree.id);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: '4px',
+                              cursor: 'pointer',
+                              color: 'var(--text-muted)',
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            className="hover-bg"
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
 
                         {activeDropdown === tree.id && (
                           <div
@@ -862,7 +891,8 @@ export default function Dashboard() {
                           </div>
                         )}
                       </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
                 {/* Username section */}

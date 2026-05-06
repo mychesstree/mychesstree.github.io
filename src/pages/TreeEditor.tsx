@@ -12,15 +12,19 @@ import TooltipButton from '../components/TooltipButton';
 import MonthPicker from '../components/MonthPicker';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import type { TreeNode } from '../types/tree';
-import { uciToArrow, stripPending, findNode, countNodes, hasDuplicateFen, deleteNodeFromTree, parsePgnMoves, getChildMoveArrows, findDivergencePoint, addMovesAsVariation, extractMovesFromTree, findDuplicateGameBranch, findParentWithMultipleChildren } from '../utils/treeUtils';
+import { useSubscription } from '../hooks/useSubscription';
+import { uciToArrow, stripPending, findNode, getNodeDepth, countNodes, hasDuplicateFen, deleteNodeFromTree, parsePgnMoves, getChildMoveArrows, findDivergencePoint, addMovesAsVariation, extractMovesFromTree, findDuplicateGameBranch, findParentWithMultipleChildren } from '../utils/treeUtils';
 import { parsePgn, pgnToTree, fetchLichessStudy, fetchLichessGames, fetchChesscomGames, processGamesToTree, filterDuplicateGames, type ArchivedGame } from '../utils/pgnParser';
 import { studyCache } from '../utils/studyCache';
 import { chesscomCache } from '../utils/chesscomCache';
 import { useToast } from '../components/Toast';
+import LoadingScreen from '../components/LoadingScreen';
+import PositionPanel from '../components/PositionPanel';
 
 // Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
   const { user, isGuest, getGuestTree, saveGuestTree } = useAuth();
+  const { subscription, canAddMove, isPro } = useSubscription();
   const isMobile = useMobile();
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string; study?: string }>();
@@ -94,9 +98,9 @@ export default function TreeEditor() {
   const addToHistory = useCallback((tree: TreeNode, fen: string) => {
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push({ 
+      newHistory.push({
         treeData: JSON.parse(JSON.stringify(tree)),
-        fen 
+        fen
       });
       return newHistory;
     });
@@ -453,7 +457,7 @@ export default function TreeEditor() {
   }, []);
 
   const loadShares = async () => {
-    if (!id || !user || !treeMeta?.user_id || user.id !== treeMeta.user_id) return;
+    if (!id || !user || !treeMeta?.user_id || user.id !== treeMeta?.user_id) return;
     setLoadingShares(true);
     const { data } = await supabase
       .from('tree_shares')
@@ -572,7 +576,7 @@ export default function TreeEditor() {
   // Load public status from tree metadata
   useEffect(() => {
     if (treeMeta) {
-      setIsPublic(treeMeta.is_public || false);
+      setIsPublic(treeMeta?.is_public || false);
     }
   }, [treeMeta]);
 
@@ -641,6 +645,16 @@ export default function TreeEditor() {
         const cloned: TreeNode = JSON.parse(JSON.stringify(treeData));
         const parent = findNode(cloned, prevFen);
         if (!parent) return treeData;
+
+        // Check depth limit
+        const currentDepth = getNodeDepth(cloned, prevFen) || 0;
+        if (!canAddMove(currentDepth)) {
+          showError(`Depth limit reached (${isPro() ? 36 : 24} moves). Upgrade to Pro for more!`);
+          gameRef.current = new Chess(prevFen);
+          setCurrentFen(prevFen);
+          return treeData;
+        }
+
         parent.children.push({ fen: newFen, move: moveObj.san, children: [] });
         return cloned;
       })();
@@ -1306,7 +1320,7 @@ export default function TreeEditor() {
     ...arrow,
     key: arrow.id || `child-${arrow.startSquare}-${arrow.endSquare}-${index}`
   })) : [];
-  
+
   const userArrows = (treeData ? findNode(treeData, currentFen)?.shapes || [] : []).map((s: any, index: number) => ({
     startSquare: s.from,
     endSquare: s.to,
@@ -1322,387 +1336,298 @@ export default function TreeEditor() {
 
   const boardOrientation: 'white' | 'black' = treeMeta?.color === 'black' ? 'black' : 'white';
 
-  if (loading) return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: 'var(--text-muted)' }}>
-      Loading tree…
-    </div>
-  );
-  if (treeNotFound || !treeMeta) return <TreeNotFound />;
+  if (!loading && (treeNotFound || !treeMeta)) return <TreeNotFound />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: `calc(100vh - ${isMobile && headerCollapsed ? '0rem' : 'var(--header-height)'} - 1rem)`, gap: `${isMobile ? '0rem' : '1rem'}` }}>
-      {/* Share Modal */}
-      {showShareModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{ maxWidth: 400, width: '100%', position: 'relative' }}>
-            <button onClick={() => setShowShareModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Share2 size={24} color="var(--accent-color)" />
-              Share Tree
-            </h2>
+      <LoadingScreen isLoading={loading} />
+      {!loading && treeMeta && (
+        <>
+          {/* Share Modal */}
+          {showShareModal && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: '1rem'
+            }}>
+              <div className="card animate-fade-in" style={{ maxWidth: 400, width: '100%', position: 'relative' }}>
+                <button onClick={() => setShowShareModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+                <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Share2 size={24} color="var(--accent-color)" />
+                  Share Tree
+                </h2>
 
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
-                <label>Recipient Username</label>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="Enter exact username"
-                    value={shareUsername}
-                    onChange={(e) => setShareUsername(e.target.value.toLowerCase())}
-                    style={{ flex: 1 }}
-                  />
-                  <TooltipButton
-                    tooltip={`Current: ${shareAccess === 'read' ? 'Read Only' : 'Edit Access'} - Click to toggle`}
-                    onClick={() => setShareAccess(shareAccess === 'read' ? 'edit' : 'read')}
-                    className="btn btn-secondary"
-                    style={{
-                      padding: '0.5rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: '44px',
-                      height: '40px',
-                      flexShrink: 0
-                    }}
-                  >
-                    {shareAccess === 'read' ? <Eye size={18} /> : <Pencil size={18} />}
-                  </TooltipButton>
-                </div>
-              </div>
-            </div>
-
-            {shareStatus.msg && (
-              <div style={{
-                padding: '0.75rem',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '0.85rem',
-                marginBottom: '1rem',
-                backgroundColor: shareStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-                color: shareStatus.type === 'error' ? '#ef4444' : '#22c55e',
-                border: `1px solid ${shareStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)'}`
-              }}>
-                {shareStatus.msg}
-              </div>
-            )}
-
-            <button
-              onClick={async () => {
-                setShareStatus({ type: '', msg: '' });
-                try {
-                  const { data: resUser, error: userError } = await supabase
-                    .from('users')
-                    .select('id')
-                    .eq('username', shareUsername)
-                    .single();
-
-                  if (userError || !resUser) {
-                    showError('User not found');
-                    return;
-                  }
-
-                  const { error: shareError } = await supabase
-                    .from('tree_shares')
-                    .upsert({ tree_id: id, user_id: resUser.id, access_level: shareAccess });
-
-                  if (shareError) throw shareError;
-                  setShareStatus({ type: 'success', msg: `Shared with ${shareUsername}!` });
-                  setShareUsername('');
-                  loadShares();
-                } catch (err: any) {
-                  setShareStatus({ type: 'error', msg: err.message });
-                }
-              }}
-              className="btn"
-              style={{ width: '100%', marginTop: '1rem' }}
-            >
-              Grant Access
-            </button>
-
-            {/* Public Toggle */}
-            {!isGuest && (
-              <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Make Tree Public</span>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    {isPublic && (
-                      <button
-                        onClick={copyPublicUrl}
+                  <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label>Recipient Username</label>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Enter exact username"
+                        value={shareUsername}
+                        onChange={(e) => setShareUsername(e.target.value.toLowerCase())}
+                        style={{ flex: 1 }}
+                      />
+                      <TooltipButton
+                        tooltip={`Current: ${shareAccess === 'read' ? 'Read Only' : 'Edit Access'} - Click to toggle`}
+                        onClick={() => setShareAccess(shareAccess === 'read' ? 'edit' : 'read')}
                         className="btn btn-secondary"
                         style={{
-                          padding: '0.6rem 0.6rem',
-                          fontSize: '0.8rem',
+                          padding: '0.5rem',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '0.5rem'
+                          justifyContent: 'center',
+                          minWidth: '44px',
+                          height: '40px',
+                          flexShrink: 0
                         }}
                       >
-                        {publicUrlCopied ? (
-                          'Copied!'
-                        ) : (
-                          <>
-                            <Copy size={14} />
-                          </>
-                        )}
-                      </button>
-                    )}
-                    <button
-                      onClick={togglePublic}
-                      className={`btn ${isPublic ? 'btn-public' : 'btn-secondary'}`}
-                      style={{
-                        padding: '0.4rem 0.8rem',
-                        fontSize: '0.8rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        color: isPublic ? '#ffffff' : undefined
-                      }}
-                    >
-                      {isPublic ? <Globe size={16} /> : <GlobeLock size={16} />}
-                      {isPublic ? 'Public' : 'Private'}
-                    </button>
+                        {shareAccess === 'read' ? <Eye size={18} /> : <Pencil size={18} />}
+                      </TooltipButton>
+                    </div>
                   </div>
                 </div>
-                <p className="text-muted text-sm" style={{ margin: 0 }}>
-                  {isPublic
-                    ? 'Anyone can view this tree with the link. Toggle to make it private.'
-                    : 'Make this tree accessible to anyone with the link.'}
-                </p>
-              </div>
-            )}
 
-            {/* Existing Shares List */}
-            {user?.id === treeMeta.user_id && (
-              <div style={{ marginTop: '2rem' }}>
-                <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Current Collaborators</h4>
-                {loadingShares ? <div className="text-muted">Loading...</div> : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {existingShares.length === 0 ? <div className="text-muted text-sm">No shares yet.</div> : existingShares.map(s => (
-                      <div key={s.user_id} className="flex items-center justify-between" style={{ padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <div
+                {shareStatus.msg && (
+                  <div style={{
+                    padding: '0.75rem',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '0.85rem',
+                    marginBottom: '1rem',
+                    backgroundColor: shareStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                    color: shareStatus.type === 'error' ? '#ef4444' : '#22c55e',
+                    border: `1px solid ${shareStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)'}`
+                  }}>
+                    {shareStatus.msg}
+                  </div>
+                )}
+
+                <button
+                  onClick={async () => {
+                    setShareStatus({ type: '', msg: '' });
+                    try {
+                      const { data: resUser, error: userError } = await supabase
+                        .from('users')
+                        .select('id')
+                        .eq('username', shareUsername)
+                        .single();
+
+                      if (userError || !resUser) {
+                        showError('User not found');
+                        return;
+                      }
+
+                      const { error: shareError } = await supabase
+                        .from('tree_shares')
+                        .upsert({ tree_id: id, user_id: resUser.id, access_level: shareAccess });
+
+                      if (shareError) throw shareError;
+                      setShareStatus({ type: 'success', msg: `Shared with ${shareUsername}!` });
+                      setShareUsername('');
+                      loadShares();
+                    } catch (err: any) {
+                      setShareStatus({ type: 'error', msg: err.message });
+                    }
+                  }}
+                  className="btn"
+                  style={{ width: '100%', marginTop: '1rem' }}
+                >
+                  Grant Access
+                </button>
+
+                {/* Public Toggle */}
+                {!isGuest && (
+                  <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Make Tree Public</span>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {isPublic && (
+                          <button
+                            onClick={copyPublicUrl}
+                            className="btn btn-secondary"
                             style={{
-                              padding: '0.25rem',
-                              marginLeft: '0.5rem',
-                              borderRadius: '4px',
-                              backgroundColor: 'rgba(255,255,255,0.1)',
+                              padding: '0.6rem 0.6rem',
+                              fontSize: '0.8rem',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '24px',
-                              height: '24px'
+                              gap: '0.5rem'
                             }}
                           >
-                            {s.access_level === 'read' ? <Eye size={14} /> : <Pencil size={14} />}
-                          </div>
-                          <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{s.users?.username || 'Unknown'}</div>
-                        </div>
+                            {publicUrlCopied ? (
+                              'Copied!'
+                            ) : (
+                              <>
+                                <Copy size={14} />
+                              </>
+                            )}
+                          </button>
+                        )}
                         <button
-                          onClick={async () => {
-                            await supabase.from('tree_shares').delete().eq('tree_id', id).eq('user_id', s.user_id);
-                            loadShares();
+                          onClick={togglePublic}
+                          className={`btn ${isPublic ? 'btn-public' : 'btn-secondary'}`}
+                          style={{
+                            padding: '0.4rem 0.8rem',
+                            fontSize: '0.8rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            color: isPublic ? '#ffffff' : undefined
                           }}
-                          className="btn btn-icon btn-secondary"
-                          style={{ color: '#ef4444' }}
                         >
-                          <Trash2 size={16} />
+                          {isPublic ? <Globe size={16} /> : <GlobeLock size={16} />}
+                          {isPublic ? 'Public' : 'Private'}
                         </button>
                       </div>
-                    ))}
+                    </div>
+                    <p className="text-muted text-sm" style={{ margin: 0 }}>
+                      {isPublic
+                        ? 'Anyone can view this tree with the link. Toggle to make it private.'
+                        : 'Make this tree accessible to anyone with the link.'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Existing Shares List */}
+                {user?.id === treeMeta.user_id && (
+                  <div style={{ marginTop: '2rem' }}>
+                    <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Current Collaborators</h4>
+                    {loadingShares ? <div className="text-muted">Loading...</div> : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {existingShares.length === 0 ? <div className="text-muted text-sm">No shares yet.</div> : existingShares.map(s => (
+                          <div key={s.user_id} className="flex items-center justify-between" style={{ padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <div
+                                style={{
+                                  padding: '0.25rem',
+                                  marginLeft: '0.5rem',
+                                  borderRadius: '4px',
+                                  backgroundColor: 'rgba(255,255,255,0.1)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: '24px',
+                                  height: '24px'
+                                }}
+                              >
+                                {s.access_level === 'read' ? <Eye size={14} /> : <Pencil size={14} />}
+                              </div>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{s.users?.username || 'Unknown'}</div>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                await supabase.from('tree_shares').delete().eq('tree_id', id).eq('user_id', s.user_id);
+                                loadShares();
+                              }}
+                              className="btn btn-icon btn-secondary"
+                              style={{ color: '#ef4444' }}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Public URL Modal */}
-      {showPublicUrlModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{ maxWidth: 450, width: '100%', position: 'relative' }}>
-            <button onClick={() => setShowPublicUrlModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Globe size={24} color="#ffffff" />
-              Tree is Now Public!
-            </h2>
-            <p className="text-muted text-sm" style={{ marginBottom: '1.5rem' }}>
-              Your tree "{treeMeta?.title}" is now publicly accessible. Share this URL with anyone to let them view your repertoire:
-            </p>
-
+          {/* Public URL Modal */}
+          {showPublicUrlModal && (
             <div style={{
-              display: 'flex',
-              gap: '0.5rem',
-              marginBottom: '1.5rem',
-              padding: '0.75rem',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-color)'
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: '1rem'
             }}>
-              <input
-                type="text"
-                readOnly
-                value={`${window.location.origin}/#/editor/${id}`}
-                style={{
-                  flex: 1,
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-main)',
-                  fontSize: '0.9rem',
-                  fontFamily: 'monospace'
-                }}
-              />
-              <button
-                onClick={copyPublicUrl}
-                className="btn btn-secondary"
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.8rem',
+              <div className="card animate-fade-in" style={{ maxWidth: 450, width: '100%', position: 'relative' }}>
+                <button onClick={() => setShowPublicUrlModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+                <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Globe size={24} color="#ffffff" />
+                  Tree is Now Public!
+                </h2>
+                <p className="text-muted text-sm" style={{ marginBottom: '1.5rem' }}>
+                  Your tree "{treeMeta?.title}" is now publicly accessible. Share this URL with anyone to let them view your repertoire:
+                </p>
+
+                <div style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                {publicUrlCopied ? (
-                  <>
-                    <span style={{ color: '#ffffff' }}>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    Copy Link
-                  </>
-                )}
-              </button>
+                  gap: '0.5rem',
+                  marginBottom: '1.5rem',
+                  padding: '0.75rem',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/#/editor/${id}`}
+                    style={{
+                      flex: 1,
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-main)',
+                      fontSize: '0.9rem',
+                      fontFamily: 'monospace'
+                    }}
+                  />
+                  <button
+                    onClick={copyPublicUrl}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    {publicUrlCopied ? (
+                      <>
+                        <span style={{ color: '#ffffff' }}>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        Copy Link
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button
+                    onClick={() => setShowPublicUrlModal(false)}
+                    className="btn"
+                    style={{ flex: 1 }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
             </div>
+          )}
 
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                onClick={() => setShowPublicUrlModal(false)}
-                className="btn"
-                style={{ flex: 1 }}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Import Modal */}
-      {showImportModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{ maxWidth: 500, width: '100%', position: 'relative' }}>
-            <button onClick={() => { setShowImportModal(false); setImportPgnText(''); }} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Import size={24} color="var(--accent-color)" />
-              Import Lichess Game
-            </h2>
-            <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
-              Paste a PGN from a Lichess export to preview it as a branch. This won't be saved until you copy moves to your repertoire.
-            </p>
-
-            <textarea
-              className="input"
-              placeholder="Paste PGN here..."
-              value={importPgnText}
-              onChange={(e) => setImportPgnText(e.target.value)}
-              style={{ width: '100%', minHeight: 200, fontFamily: 'monospace', fontSize: '0.8rem' }}
-            />
-
-            <button
-              onClick={handleImport}
-              className="btn"
-              style={{ width: '100%', marginTop: '1rem' }}
-            >
-              Preview Branch
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Combined Import Modal */}
-      {showImportModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{ maxWidth: 600, width: '100%', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }}>
-            <button onClick={() => {
-              setShowImportModal(false);
-              setImportPgnText('');
-              setStudyUrl('');
-              setStudyImportStatus({ type: '', msg: '' });
-              setImportedStudyChapters([]);
-            }} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Import size={24} color="var(--accent-color)" />
-              Import from Lichess
-            </h2>
-
-            {/* Tab Navigation */}
+          {/* Import Modal */}
+          {showImportModal && (
             <div style={{
-              display: 'flex',
-              gap: '0.5rem',
-              marginBottom: '1rem',
-              borderBottom: '1px solid var(--border-color)'
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: '1rem'
             }}>
-              <button
-                onClick={() => setImportTab('game')}
-                className={`btn ${importTab === 'game' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{
-                  borderBottom: importTab === 'game' ? '2px solid var(--accent-color)' : 'none',
-                  borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
-                }}
-              >
-                Import Game
-              </button>
-              <button
-                onClick={() => setImportTab('study')}
-                className={`btn ${importTab === 'study' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{
-                  borderBottom: importTab === 'study' ? '2px solid var(--accent-color)' : 'none',
-                  borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
-                }}
-              >
-                Import Study
-              </button>
-              <button
-                onClick={() => setImportTab('archive')}
-                className={`btn ${importTab === 'archive' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{
-                  borderBottom: importTab === 'archive' ? '2px solid var(--accent-color)' : 'none',
-                  borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
-                }}
-              >
-                Import Archive
-              </button>
-            </div>
-
-            {/* Game Import Tab */}
-            {importTab === 'game' && (
-              <div>
+              <div className="card animate-fade-in" style={{ maxWidth: 500, width: '100%', position: 'relative' }}>
+                <button onClick={() => { setShowImportModal(false); setImportPgnText(''); }} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+                <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Import size={24} color="var(--accent-color)" />
+                  Import Lichess Game
+                </h2>
                 <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
                   Paste a PGN from a Lichess export to preview it as a branch. This won't be saved until you copy moves to your repertoire.
                 </p>
@@ -1723,1144 +1648,1244 @@ export default function TreeEditor() {
                   Preview Branch
                 </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Study Import Tab */}
-            {importTab === 'study' && (
-              <div>
-                <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
-                  Enter a Lichess study URL to import all chapters as variations in your repertoire.
-                </p>
+          {/* Combined Import Modal */}
+          {showImportModal && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: '1rem'
+            }}>
+              <div className="card animate-fade-in" style={{ maxWidth: 600, width: '100%', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }}>
+                <button onClick={() => {
+                  setShowImportModal(false);
+                  setImportPgnText('');
+                  setStudyUrl('');
+                  setStudyImportStatus({ type: '', msg: '' });
+                  setImportedStudyChapters([]);
+                }} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+                <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Import size={24} color="var(--accent-color)" />
+                  Import from Lichess
+                </h2>
 
-                <div className="input-group" style={{ marginBottom: '1rem' }}>
-                  <label>Study URL</label>
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="https://lichess.org/study/xxxxx"
-                    value={studyUrl}
-                    onChange={(e) => setStudyUrl(e.target.value)}
-                    style={{ width: '100%' }}
-                  />
+                {/* Tab Navigation */}
+                <div style={{
+                  display: 'flex',
+                  gap: '0.5rem',
+                  marginBottom: '1rem',
+                  borderBottom: '1px solid var(--border-color)'
+                }}>
+                  <button
+                    onClick={() => setImportTab('game')}
+                    className={`btn ${importTab === 'game' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{
+                      borderBottom: importTab === 'game' ? '2px solid var(--accent-color)' : 'none',
+                      borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
+                    }}
+                  >
+                    Import Game
+                  </button>
+                  <button
+                    onClick={() => setImportTab('study')}
+                    className={`btn ${importTab === 'study' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{
+                      borderBottom: importTab === 'study' ? '2px solid var(--accent-color)' : 'none',
+                      borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
+                    }}
+                  >
+                    Import Study
+                  </button>
+                  <button
+                    onClick={() => setImportTab('archive')}
+                    className={`btn ${importTab === 'archive' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{
+                      borderBottom: importTab === 'archive' ? '2px solid var(--accent-color)' : 'none',
+                      borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
+                    }}
+                  >
+                    Import Archive
+                  </button>
                 </div>
 
-                {studyImportStatus.msg && (
-                  <div style={{
-                    padding: '0.75rem',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '0.85rem',
-                    marginBottom: '1rem',
-                    backgroundColor: studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
-                      studyImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
-                        studyImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                    color: studyImportStatus.type === 'error' ? '#ef4444' :
-                      studyImportStatus.type === 'success' ? '#22c55e' :
-                        studyImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
-                    border: studyImportStatus.type ? `1px solid ${studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' :
-                      studyImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.2)' :
-                        'rgba(59, 130, 246, 0.2)'
-                      }` : 'none'
-                  }}>
-                    {studyImportStatus.msg}
+                {/* Game Import Tab */}
+                {importTab === 'game' && (
+                  <div>
+                    <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
+                      Paste a PGN from a Lichess export to preview it as a branch. This won't be saved until you copy moves to your repertoire.
+                    </p>
+
+                    <textarea
+                      className="input"
+                      placeholder="Paste PGN here..."
+                      value={importPgnText}
+                      onChange={(e) => setImportPgnText(e.target.value)}
+                      style={{ width: '100%', minHeight: 200, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                    />
+
+                    <button
+                      onClick={handleImport}
+                      className="btn"
+                      style={{ width: '100%', marginTop: '1rem' }}
+                    >
+                      Preview Branch
+                    </button>
                   </div>
                 )}
 
-                {importedStudyChapters.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>Imported Chapters:</h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
-                      {importedStudyChapters.map((chapter, index) => (
-                        <div key={index} style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '0.5rem',
-                          backgroundColor: 'rgba(255,255,255,0.05)',
-                          borderRadius: 'var(--radius-md)',
-                          border: '1px solid var(--border-color)'
-                        }}>
-                          <span style={{ fontSize: '0.85rem' }}>{chapter.name}</span>
-                          <button
-                            onClick={() => handleAddStudyChapter(chapter.tree, chapter.name)}
-                            className="btn btn-secondary"
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                          >
-                            Add to Tree
-                          </button>
-                        </div>
-                      ))}
+                {/* Study Import Tab */}
+                {importTab === 'study' && (
+                  <div>
+                    <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
+                      Enter a Lichess study URL to import all chapters as variations in your repertoire.
+                    </p>
+
+                    <div className="input-group" style={{ marginBottom: '1rem' }}>
+                      <label>Study URL</label>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="https://lichess.org/study/xxxxx"
+                        value={studyUrl}
+                        onChange={(e) => setStudyUrl(e.target.value)}
+                        style={{ width: '100%' }}
+                      />
                     </div>
+
+                    {studyImportStatus.msg && (
+                      <div style={{
+                        padding: '0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: '0.85rem',
+                        marginBottom: '1rem',
+                        backgroundColor: studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                          studyImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
+                            studyImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        color: studyImportStatus.type === 'error' ? '#ef4444' :
+                          studyImportStatus.type === 'success' ? '#22c55e' :
+                            studyImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
+                        border: studyImportStatus.type ? `1px solid ${studyImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' :
+                          studyImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.2)' :
+                            'rgba(59, 130, 246, 0.2)'
+                          }` : 'none'
+                      }}>
+                        {studyImportStatus.msg}
+                      </div>
+                    )}
+
+                    {importedStudyChapters.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>Imported Chapters:</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                          {importedStudyChapters.map((chapter, index) => (
+                            <div key={index} style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '0.5rem',
+                              backgroundColor: 'rgba(255,255,255,0.05)',
+                              borderRadius: 'var(--radius-md)',
+                              border: '1px solid var(--border-color)'
+                            }}>
+                              <span style={{ fontSize: '0.85rem' }}>{chapter.name}</span>
+                              <button
+                                onClick={() => handleAddStudyChapter(chapter.tree, chapter.name)}
+                                className="btn btn-secondary"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                              >
+                                Add to Tree
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <button
+                        onClick={handleStudyImport}
+                        disabled={studyImportStatus.type === 'loading'}
+                        className="btn"
+                        style={{ flex: 1 }}
+                      >
+                        {studyImportStatus.type === 'loading' ? 'Importing...' : 'Import Study'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Archive Import Tab */}
+                {importTab === 'archive' && (
+                  <div>
+                    <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
+                      Import games from your Lichess account. Games will be processed 10 at a time and limited to first {archiveMaxMoves} moves each.
+                    </p>
+
+                    {/* Username Input */}
+                    <div className="input-group" style={{ marginBottom: '1rem' }}>
+                      <label>Lichess Username</label>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Enter Lichess username"
+                        value={archiveUsername}
+                        onChange={(e) => setArchiveUsername(e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+
+                    {/* Filters */}
+                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                          Color Filter
+                        </label>
+                        <select
+                          className="input"
+                          value={archiveColor}
+                          onChange={(e) => setArchiveColor(e.target.value as 'white' | 'black' | 'both')}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="both">All Games</option>
+                          <option value="white">White Games Only</option>
+                          <option value="black">Black Games Only</option>
+                        </select>
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                          Max Moves per Game
+                        </label>
+                        <input
+                          type="number"
+                          className="input"
+                          min="1"
+                          max="50"
+                          value={archiveMaxMoves}
+                          onChange={(e) => setArchiveMaxMoves(parseInt(e.target.value) || 10)}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Status Message */}
+                    {archiveImportStatus.msg && (
+                      <div style={{
+                        padding: '0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: '0.85rem',
+                        marginBottom: '1rem',
+                        backgroundColor: archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                          archiveImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
+                            archiveImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        color: archiveImportStatus.type === 'error' ? '#ef4444' :
+                          archiveImportStatus.type === 'success' ? '#22c55e' :
+                            archiveImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
+                        border: archiveImportStatus.type ? `1px solid ${archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' :
+                          archiveImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.2)' :
+                            'rgba(59, 130, 246, 0.2)'
+                          }` : 'none'
+                      }}>
+                        {archiveImportStatus.msg}
+                      </div>
+                    )}
+
+                    {/* Fetched Games Display */}
+                    {fetchedGames.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
+                          Found {fetchedGames.length} Games (showing first 50)
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                          {fetchedGames.map((game: ArchivedGame) => (
+                            <div key={game.id} style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '0.5rem',
+                              backgroundColor: 'rgba(255,255,255,0.05)',
+                              borderRadius: 'var(--radius-md)',
+                              border: '1px solid var(--border-color)',
+                              fontSize: '0.8rem'
+                            }}>
+                              <div>
+                                <div style={{ fontWeight: 600 }}>
+                                  {game.white?.username} vs {game.black?.username}
+                                </div>
+                                <div style={{ color: 'var(--text-muted)' }}>
+                                  {game.result} • {game.color} • {game.date ? new Date(game.date).toLocaleDateString() : 'Unknown date'}
+                                </div>
+                              </div>
+                              <span style={{
+                                padding: '0.25rem 0.5rem',
+                                backgroundColor: 'var(--accent-color)',
+                                color: '#fff',
+                                borderRadius: 'var(--radius-sm)',
+                                fontSize: '0.7rem'
+                              }}>
+                                {game.color === 'white' ? 'White' : 'Black'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <button
+                        onClick={handleArchiveImport}
+                        disabled={isFetchingArchive || !archiveUsername.trim()}
+                        className="btn"
+                        style={{ flex: 1 }}
+                      >
+                        {isFetchingArchive ? 'Fetching...' : 'Fetch Games'}
+                      </button>
+
+                      {fetchedGames.length > 0 && (
+                        <button
+                          onClick={handleProcessSelectedGames}
+                          className="btn btn-primary"
+                          style={{ flex: 1 }}
+                        >
+                          Import {fetchedGames.length} Games
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Common Cancel Button */}
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportPgnText('');
+                    setStudyUrl('');
+                    setStudyImportStatus({ type: '', msg: '' });
+                    setImportedStudyChapters([]);
+                    // Reset archive state
+                    setArchiveUsername('');
+                    setFetchedGames([]);
+                    setArchiveImportStatus({ type: '', msg: '' });
+                  }}
+                  className="btn btn-secondary"
+                  style={{ width: '100%', marginTop: '1rem' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Header - Collapsible on mobile */}
+          {!isMobile || !headerCollapsed ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
+              padding: isMobile ? '0.5rem 1rem' : undefined,
+              backgroundColor: isMobile ? 'var(--panel-bg)' : undefined,
+              borderBottom: isMobile ? '1px solid var(--border-color)' : undefined,
+              position: isMobile ? 'sticky' : undefined,
+              top: isMobile ? 0 : undefined,
+              zIndex: isMobile ? 10 : undefined
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <button onClick={() => navigate('/')} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
+                <div style={{ flex: isMobile && showMenu ? 0 : undefined, overflow: 'hidden', transition: 'flex 0.3s ease' }}>
+                  {(!isMobile || !showMenu) && <h2 style={{ margin: 0, fontSize: '1.2rem', borderBottom: treeMeta.color === 'white' ? '5px solid #fff' : '5px solid #444444ff', display: 'inline-block', lineHeight: '1.3' }}>{treeMeta.title}</h2>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', position: 'relative' }}>
+                {/* Mobile: Always show save button outside menu */}
+                {isMobile && !viewOnly && (
+                  <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={() => { handleSave(); }} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
+                )}
+
+                {/* Mobile: show expanded buttons when menu open, then hamburger */}
+                {isMobile && (
+                  <>
+                    {showMenu && (
+                      <>
+                        <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => runMobileMenuAction(() => setDeleteMode(!isDeleteMode))} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
+                        <TooltipButton tooltip="Share Repertoire" onClick={() => runMobileMenuAction(() => setShowShareModal(true))} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                        <TooltipButton tooltip="Import" onClick={() => runMobileMenuAction(() => setShowStudySelector(true))} className="btn btn-icon btn-secondary" style={{ position: 'relative' }}><Import size={20} /></TooltipButton>
+                        <TooltipButton tooltip="Toggle Fullscreen Tree" onClick={() => runMobileMenuAction(() => setTreeFullscreen(!treeFullscreen))} className="btn btn-icon btn-secondary">{treeFullscreen ? <X size={20} /> : <Maximize size={20} />}</TooltipButton>
+                      </>
+                    )}
+                    <button onClick={() => setShowMenu(!showMenu)} className="btn btn-icon btn-secondary" style={showMenu ? { backgroundColor: 'var(--accent-color)' } : undefined}>
+                      <Menu size={20} />
+                    </button>
+                  </>
+                )}
+
+                {/* Desktop: always show all buttons */}
+                {!isMobile && (
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                    <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => setDeleteMode(!isDeleteMode)} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
+                    <TooltipButton tooltip="Share Repertoire" onClick={() => setShowShareModal(true)} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                    <TooltipButton tooltip="Import" onClick={() => { setShowStudySelector(true); }} className="btn btn-icon btn-secondary"><Import size={20} /></TooltipButton>
+                    <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
+                    {!viewOnly ? (
+                      <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={handleSave} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', paddingRight: '1rem', paddingLeft: '1rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                        <Users size={16} className="text-muted" /><span className="text-xs text-muted" style={{ fontWeight: 600 }}>READ</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Mobile: Collapsed header - show toggle button */
+            <div style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              padding: '0.5rem 1rem',
+              backgroundColor: 'var(--panel-bg)',
+              borderBottom: '1px solid var(--border-color)'
+            }}>
+              <button
+                onClick={() => setHeaderCollapsed(false)}
+                className="btn btn-secondary btn-icon"
+                style={{ fontSize: '12px', fontWeight: 'bold' }}
+              >
+                ⛶
+              </button>
+            </div>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {nodeToDelete && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: '1rem'
+            }}>
+              <div className="card animate-fade-in" style={{ maxWidth: 400, width: '100%', border: '1px solid var(--error)' }}>
+                <h2 style={{ marginBottom: '1rem', color: '#ef4444' }}>Prune Branch?</h2>
+                <p style={{ marginBottom: '1.5rem' }}>
+                  Are you sure you want to delete the line starting with <strong>{nodeToDelete.move}</strong>?
+                  <br /><br />
+                  This will remove <strong>{countNodes(findNode(treeData!, nodeToDelete.fen)!)}</strong> moves from your repertoire.
+                </p>
+
+                {treeData && hasDuplicateFen(treeData, nodeToDelete.fen) > 1 && (
+                  <div style={{ padding: '0.75rem', backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.2)', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#f59e0b' }}>
+                    <strong>Note:</strong> This position appears in other parts of your tree. Deleting this branch only removes this specific history segment.
                   </div>
                 )}
 
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <button
-                    onClick={handleStudyImport}
-                    disabled={studyImportStatus.type === 'loading'}
-                    className="btn"
+                    onClick={() => setNodeToDelete(null)}
+                    className="btn btn-secondary"
                     style={{ flex: 1 }}
                   >
-                    {studyImportStatus.type === 'loading' ? 'Importing...' : 'Import Study'}
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    className="btn btn-danger"
+                    style={{ flex: 1, backgroundColor: '#ef4444' }}
+                  >
+                    Delete
                   </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Archive Import Tab */}
-            {importTab === 'archive' && (
-              <div>
-                <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
-                  Import games from your Lichess account. Games will be processed 10 at a time and limited to first {archiveMaxMoves} moves each.
-                </p>
-
-                {/* Username Input */}
-                <div className="input-group" style={{ marginBottom: '1rem' }}>
-                  <label>Lichess Username</label>
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="Enter Lichess username"
-                    value={archiveUsername}
-                    onChange={(e) => setArchiveUsername(e.target.value)}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-
-                {/* Filters */}
-                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                      Color Filter
-                    </label>
-                    <select
-                      className="input"
-                      value={archiveColor}
-                      onChange={(e) => setArchiveColor(e.target.value as 'white' | 'black' | 'both')}
-                      style={{ width: '100%' }}
-                    >
-                      <option value="both">All Games</option>
-                      <option value="white">White Games Only</option>
-                      <option value="black">Black Games Only</option>
-                    </select>
-                  </div>
-
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                      Max Moves per Game
-                    </label>
-                    <input
-                      type="number"
-                      className="input"
-                      min="1"
-                      max="50"
-                      value={archiveMaxMoves}
-                      onChange={(e) => setArchiveMaxMoves(parseInt(e.target.value) || 10)}
-                      style={{ width: '100%' }}
+          {/* Editor Body */}
+          <div className="editor-layout">
+            <div className="chess-pane-new" style={{ padding: `${isMobile ? '0.25rem' : '1rem'}` }}>
+              <div className="chess-board-container">
+                {/* Eval Bar Container */}
+                <div
+                  onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY, active: true })}
+                  onMouseLeave={() => setMousePos(prev => ({ ...prev, active: false }))}
+                  className="eval-bar-wrapper"
+                  data-tooltip="Engine Evaluation"
+                  style={{ width: `${isMobile ? '98%' : '2%'}`, marginBottom: `${isMobile ? '.5rem' : '0rem'}`, marginLeft: `${isMobile ? '.25rem' : '0'}` }}
+                >
+                  <div
+                    className="eval-bar-bg"
+                    style={{
+                      display: 'flex',
+                      flexDirection: window.innerWidth > 768
+                        ? (treeMeta?.color === 'black' ? 'column' : 'column-reverse')
+                        : (treeMeta?.color === 'black' ? 'row' : 'row-reverse'),
+                      justifyContent: 'flex-start'
+                    }}
+                  >
+                    <div
+                      className="eval-bar-fill"
+                      style={{
+                        // On desktop it's height, on mobile it's width
+                        height: window.innerWidth > 768 ? `${whitePercent}%` : '100%',
+                        width: window.innerWidth > 768 ? '100%' : `${whitePercent}%`,
+                        transition: 'all 0.4s ease'
+                      }}
                     />
                   </div>
                 </div>
 
-                {/* Status Message */}
-                {archiveImportStatus.msg && (
+                {/* Dynamic Mouse Tooltip (Desktop only) */}
+                {mousePos.active && window.innerWidth > 768 && (
                   <div style={{
-                    padding: '0.75rem',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '0.85rem',
-                    marginBottom: '1rem',
-                    backgroundColor: archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
-                      archiveImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
-                        archiveImportStatus.type === 'loading' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                    color: archiveImportStatus.type === 'error' ? '#ef4444' :
-                      archiveImportStatus.type === 'success' ? '#22c55e' :
-                        archiveImportStatus.type === 'loading' ? '#3b82f6' : 'inherit',
-                    border: archiveImportStatus.type ? `1px solid ${archiveImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' :
-                      archiveImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.2)' :
-                        'rgba(59, 130, 246, 0.2)'
-                      }` : 'none'
+                    position: 'fixed',
+                    top: mousePos.y - 35,
+                    left: mousePos.x + 15,
+                    pointerEvents: 'none',
+                    backgroundColor: 'var(--panel-bg)',
+                    border: '1px solid var(--border-color-focus)',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                    color: 'white',
+                    zIndex: 9999,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
+                    opacity: 0.95
                   }}>
-                    {archiveImportStatus.msg}
+                    Eval: <strong>{perspScore >= 0 ? '+' : ''}{perspScore.toFixed(2)}</strong>
+                    <span style={{ margin: '0 8px', opacity: 0.3 }}>|</span>
+                    Best: <strong>{bestMove || '…'}</strong>
                   </div>
                 )}
 
-                {/* Fetched Games Display */}
-                {fetchedGames.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                      Found {fetchedGames.length} Games (showing first 50)
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
-                      {fetchedGames.map((game: ArchivedGame) => (
-                        <div key={game.id} style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '0.5rem',
-                          backgroundColor: 'rgba(255,255,255,0.05)',
-                          borderRadius: 'var(--radius-md)',
+                {/* Board */}
+                <div style={{ flex: 1 }} ref={boardWrapperRef}>
+                  {(() => {
+                    const Board = Chessboard as any;
+                    return <Board
+                      options={{
+                        position: currentFen,
+                        onPieceDrop,
+                        boardOrientation,
+                        pieces: calientePieces,
+                        darkSquareStyle: boardStyles.darkSquareStyle,
+                        lightSquareStyle: boardStyles.lightSquareStyle,
+                        arrows: arrows,
+                        boardStyle: boardStyles.boardStyle,
+                      }}
+                    />;
+                  })()}
+                </div>
+              </div>
+
+              <PositionPanel
+                treeId={id!}
+                fen={currentFen}
+                isPublicTree={isPublic}
+                viewOnly={viewOnly}
+                onSuggestionAccepted={(move) => {
+                  // reuse your existing onPieceDrop logic
+                  onPieceDrop({ sourceSquare: move.uci.slice(0, 2), targetSquare: move.uci.slice(2, 4) });
+                }}
+              />
+
+            </div>
+
+
+
+            {/* Tree pane - with mobile size limits and fullscreen support */}
+            <div
+              className={`tree-pane-new ${treeFullscreen ? 'tree-pane-fullscreen' : ''}`}
+              style={{
+                flex: treeFullscreen ? '1' : undefined,
+                position: treeFullscreen ? 'fixed' : 'relative',
+                top: treeFullscreen ? 0 : undefined,
+                left: treeFullscreen ? 0 : undefined,
+                width: treeFullscreen ? '100vw' : undefined,
+                height: treeFullscreen ? '100vh' : undefined,
+                zIndex: treeFullscreen ? 1000 : undefined,
+                backgroundColor: treeFullscreen ? 'var(--panel-bg)' : undefined,
+                // Mobile size limits
+                maxHeight: isMobile && !treeFullscreen ? '300px' : undefined,
+                minHeight: isMobile && !treeFullscreen ? '200px' : undefined
+              }}
+            >
+              {treeData && (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  position: 'relative',
+                  // Add exit button for fullscreen mode
+                  display: treeFullscreen ? 'flex' : undefined,
+                  flexDirection: treeFullscreen ? 'column' : undefined
+                }}>
+                  {treeFullscreen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '10px',
+                      right: '10px',
+                      zIndex: 1001
+                    }}>
+                      <button
+                        onClick={() => setTreeFullscreen(false)}
+                        className="btn btn-secondary btn-icon"
+                        style={{
+                          backgroundColor: 'var(--panel-bg)',
                           border: '1px solid var(--border-color)',
-                          fontSize: '0.8rem'
-                        }}>
-                          <div>
-                            <div style={{ fontWeight: 600 }}>
-                              {game.white?.username} vs {game.black?.username}
-                            </div>
-                            <div style={{ color: 'var(--text-muted)' }}>
-                              {game.result} • {game.color} • {game.date ? new Date(game.date).toLocaleDateString() : 'Unknown date'}
-                            </div>
-                          </div>
-                          <span style={{
-                            padding: '0.25rem 0.5rem',
-                            backgroundColor: 'var(--accent-color)',
-                            color: '#fff',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: '0.7rem'
-                          }}>
-                            {game.color === 'white' ? 'White' : 'Black'}
-                          </span>
-                        </div>
-                      ))}
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                        }}
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+                  )}
+                  <ForceTree
+                    data={treeData}
+                    currentFen={currentFen}
+                    onNodeClick={handleNodeClick}
+                    onNodeUpdate={handleNodeUpdate}
+                    isDeleteMode={isDeleteMode}
+                    tempTreeData={tempTreeData}
+                    isFullscreen={treeFullscreen}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Study Selector Modal */}
+          {showStudySelector && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem'
+            }}>
+              <div className="card animate-fade-in" style={{
+                maxWidth: 700,
+                width: '100%',
+                position: 'relative',
+                maxHeight: isMobile ? '90vh' : '80vh',
+                overflowY: 'auto',
+                margin: isMobile ? '0' : undefined
+              }}>
+                <button onClick={() => setShowStudySelector(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+                <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Import size={20} />
+                  Import
+                </h2>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Import options */}
+                  <div>
+                    <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Import From</h3>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        onClick={() => {
+                          setShowStudySelector(false);
+                          setShowImportModal(true);
+                          setImportTab('study');
+                        }}
+                        className="btn btn-primary"
+                        style={{ flex: 1 }}
+                      >
+                        Lichess
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowStudySelector(false);
+                          setShowChesscomModal(true);
+                          // Reset state when opening fresh modal but keep current month
+                          setChesscomUsername('');
+                          // Don't reset selectedMonth - keep current month default
+                          setChesscomGames([]);
+                          setSelectedChesscomGames(new Set());
+                          setChesscomImportStatus({ type: '', msg: '' });
+                        }}
+                        className="btn btn-secondary"
+                        style={{ flex: 1 }}
+                      >
+                        Chess.com
+                      </button>
                     </div>
                   </div>
-                )}
 
-                {/* Action Buttons */}
-                <div style={{ display: 'flex', gap: '1rem' }}>
+                  {/* Imported content - Combined studies and Chess.com games */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
+                        Imported ({cachedStudies.length + cachedChesscomEntries.length})
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+                          ({cachedStudies.length} studies, {cachedChesscomEntries.length} chess.com)
+                        </span>
+                      </h3>
+                      <button
+                        onClick={() => {
+                          if (confirm('Clear all imported content?')) {
+                            studyCache.clearCache();
+                            chesscomCache.clearCache();
+                            setCachedStudies([]);
+                            setCachedChesscomEntries([]);
+                          }
+                        }}
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        Clear All
+                      </button>
+                    </div>
+
+                    {(cachedStudies.length === 0 && cachedChesscomEntries.length === 0) ? (
+                      <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                        No imported content yet. Import studies or Chess.com games to get started.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                        {/* Render studies first */}
+                        {cachedStudies.map((study) => (
+                          <div
+                            key={study.id}
+                            onClick={() => handleSelectStudy(study)}
+                            style={{
+                              padding: '1rem',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                              backgroundColor: 'var(--panel-bg)',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--accent-color)';
+                              e.currentTarget.style.transform = 'translateY(-1px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                              <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>{study.name}</h4>
+                                <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                  {study.chapters.length} chapters
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>• Lichess</span>
+                                </p>
+                                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  Imported {new Date(study.cachedAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Remove "${study.name}" from imported studies?`)) {
+                                    studyCache.removeStudy(study.id);
+                                    loadCachedStudies();
+                                    loadCachedChesscomEntries();
+                                  }
+                                }}
+                                className="btn btn-secondary btn-icon"
+                                style={{ padding: '0.25rem' }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Render Chess.com entries */}
+                        {cachedChesscomEntries.map((entry) => (
+                          <div
+                            key={`${entry.username}_${entry.month}`}
+                            onClick={() => handleSelectChesscomEntry(entry)}
+                            style={{
+                              padding: '1rem',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                              backgroundColor: 'var(--panel-bg)',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--accent-color)';
+                              e.currentTarget.style.transform = 'translateY(-1px)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
+                              e.currentTarget.style.transform = 'translateY(0)';
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                              <div>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
+                                  {entry.username} - {new Date(entry.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                </h4>
+                                <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                  {entry.games.length} games
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>• Chess.com</span>
+                                </p>
+                                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                  Cached {new Date(entry.cachedAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveChesscomEntry(entry);
+                                }}
+                                className="btn btn-secondary btn-icon"
+                                style={{ padding: '0.25rem' }}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
                   <button
-                    onClick={handleArchiveImport}
-                    disabled={isFetchingArchive || !archiveUsername.trim()}
-                    className="btn"
+                    onClick={() => setShowStudySelector(false)}
+                    className="btn btn-secondary"
                     style={{ flex: 1 }}
                   >
-                    {isFetchingArchive ? 'Fetching...' : 'Fetch Games'}
+                    Cancel
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
 
-                  {fetchedGames.length > 0 && (
-                    <button
-                      onClick={handleProcessSelectedGames}
-                      className="btn btn-primary"
-                      style={{ flex: 1 }}
-                    >
-                      Import {fetchedGames.length} Games
-                    </button>
+          {/* Chapters Modal */}
+          {showChaptersModal && selectedStudy && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: '1rem'
+            }}>
+              <div className="card animate-fade-in" style={{ maxWidth: 600, width: '100%', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }}>
+                <button onClick={() => setShowChaptersModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+                <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Import size={20} />
+                  {selectedStudy.name}
+                </h2>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Status Message */}
+                  {studyImportStatus.msg && (
+                    <div style={{
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: studyImportStatus.type === 'error' ? 'var(--error-bg)' :
+                        studyImportStatus.type === 'success' ? 'var(--success-bg)' :
+                          'var(--info-bg)',
+                      color: studyImportStatus.type === 'error' ? 'var(--error-text)' :
+                        studyImportStatus.type === 'success' ? 'var(--success-text)' :
+                          'var(--info-text)',
+                      fontSize: '0.9rem',
+                    }}>
+                      {studyImportStatus.msg}
+                    </div>
+                  )}
+
+                  {/* Chapters List */}
+                  {importedStudyChapters.length > 0 && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div>
+                          <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', margin: 0 }}>
+                            Chapters
+                          </h3>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            ({selectedChapters.size} selected)
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (selectedChapters.size === 0) {
+                              // Select all chapters
+                              setSelectedChapters(new Set(importedStudyChapters.map(chapter => chapter.name)));
+                            } else {
+                              // Clear selection
+                              setSelectedChapters(new Set());
+                            }
+                          }}
+                          className="btn btn-secondary"
+                          style={{
+                            fontSize: '0.8rem',
+                            padding: '0.5rem',
+                            minWidth: '36px',
+                            height: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title={selectedChapters.size === 0 ? 'Select all chapters' : 'Clear selection'}
+                        >
+                          {selectedChapters.size === 0 ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            </svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                              <polyline points="9 11 12 14 20 6"></polyline>
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                        {importedStudyChapters.map((chapter, index) => (
+                          <div
+                            key={index}
+                            onClick={() => handleToggleChapter(chapter.name)}
+                            style={{
+                              padding: '1rem',
+                              border: `1px solid ${selectedChapters.has(chapter.name) ? 'var(--accent-color)' : 'var(--border-color)'}`,
+                              borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                              backgroundColor: selectedChapters.has(chapter.name) ? 'var(--accent-color)' : 'var(--panel-bg)',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!selectedChapters.has(chapter.name)) {
+                                e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!selectedChapters.has(chapter.name)) {
+                                e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                              <div style={{ flex: 1 }}>
+                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>{chapter.name}</h4>
+                                <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                  Click to select this chapter for import
+                                </p>
+                              </div>
+                              <div style={{
+                                width: '20px',
+                                height: '20px',
+                                border: `2px solid ${selectedChapters.has(chapter.name) ? 'white' : 'var(--accent-color)'}`,
+                                borderRadius: '4px',
+                                backgroundColor: selectedChapters.has(chapter.name) ? 'var(--accent-color)' : 'transparent',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                {selectedChapters.has(chapter.name) && (
+                                  <span style={{ color: 'white', fontSize: '12px' }}>✓</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Import button below Chapters section */}
+                      <div style={{ marginTop: '1rem' }}>
+                        {importedStudyChapters.length > 0 && (
+                          <button
+                            onClick={handleImportSelectedChapters}
+                            disabled={selectedChapters.size === 0}
+                            className="btn btn-primary"
+                            style={{ width: '100%' }}
+                          >
+                            {studyImportStatus.type === 'loading' ? 'Importing...' : `Import ${selectedChapters.size} Selected Chapter${selectedChapters.size !== 1 ? 's' : ''}`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {importedStudyChapters.length === 0 && (
+                    <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                      No chapters found in this study.
+                    </p>
                   )}
                 </div>
               </div>
-            )}
-
-            {/* Common Cancel Button */}
-            <button
-              onClick={() => {
-                setShowImportModal(false);
-                setImportPgnText('');
-                setStudyUrl('');
-                setStudyImportStatus({ type: '', msg: '' });
-                setImportedStudyChapters([]);
-                // Reset archive state
-                setArchiveUsername('');
-                setFetchedGames([]);
-                setArchiveImportStatus({ type: '', msg: '' });
-              }}
-              className="btn btn-secondary"
-              style={{ width: '100%', marginTop: '1rem' }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Header - Collapsible on mobile */}
-      {!isMobile || !headerCollapsed ? (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '0.5rem',
-          padding: isMobile ? '0.5rem 1rem' : undefined,
-          backgroundColor: isMobile ? 'var(--panel-bg)' : undefined,
-          borderBottom: isMobile ? '1px solid var(--border-color)' : undefined,
-          position: isMobile ? 'sticky' : undefined,
-          top: isMobile ? 0 : undefined,
-          zIndex: isMobile ? 10 : undefined
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button onClick={() => navigate('/')} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
-            <div style={{ flex: isMobile && showMenu ? 0 : undefined, overflow: 'hidden', transition: 'flex 0.3s ease' }}>
-              {(!isMobile || !showMenu) && <h2 style={{ margin: 0, fontSize: '1.2rem', borderBottom: treeMeta.color === 'white' ? '5px solid #fff' : '5px solid #444444ff', display: 'inline-block', lineHeight: '1.3' }}>{treeMeta.title}</h2>}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', position: 'relative' }}>
-            {/* Mobile: Always show save button outside menu */}
-            {isMobile && !viewOnly && (
-              <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={() => { handleSave(); }} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
-            )}
-
-            {/* Mobile: show expanded buttons when menu open, then hamburger */}
-            {isMobile && (
-              <>
-                {showMenu && (
-                  <>
-                    <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => runMobileMenuAction(() => setDeleteMode(!isDeleteMode))} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
-                    <TooltipButton tooltip="Share Repertoire" onClick={() => runMobileMenuAction(() => setShowShareModal(true))} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
-                    <TooltipButton tooltip="Import" onClick={() => runMobileMenuAction(() => setShowStudySelector(true))} className="btn btn-icon btn-secondary" style={{ position: 'relative' }}><Import size={20} /></TooltipButton>
-                    <TooltipButton tooltip="Toggle Fullscreen Tree" onClick={() => runMobileMenuAction(() => setTreeFullscreen(!treeFullscreen))} className="btn btn-icon btn-secondary">{treeFullscreen ? <X size={20} /> : <Maximize size={20} />}</TooltipButton>
-                  </>
-                )}
-                <button onClick={() => setShowMenu(!showMenu)} className="btn btn-icon btn-secondary" style={showMenu ? { backgroundColor: 'var(--accent-color)' } : undefined}>
-                  <Menu size={20} />
-                </button>
-              </>
-            )}
-
-            {/* Desktop: always show all buttons */}
-            {!isMobile && (
-              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => setDeleteMode(!isDeleteMode)} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
-                <TooltipButton tooltip="Share Repertoire" onClick={() => setShowShareModal(true)} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
-                <TooltipButton tooltip="Import" onClick={() => { setShowStudySelector(true); }} className="btn btn-icon btn-secondary"><Import size={20} /></TooltipButton>
-                <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
-                {!viewOnly ? (
-                  <TooltipButton tooltip={saving ? "Saving..." : "Save Progress"} onClick={handleSave} className={`btn btn-icon ${hasPending ? 'btn-save' : 'btn-secondary'}`} style={{ opacity: saving ? 0.5 : 1 }}><Save size={20} /></TooltipButton>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <Users size={16} className="text-muted" /><span className="text-xs text-muted" style={{ fontWeight: 600 }}>READ</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        /* Mobile: Collapsed header - show toggle button */
-        <div style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          padding: '0.5rem 1rem',
-          backgroundColor: 'var(--panel-bg)',
-          borderBottom: '1px solid var(--border-color)'
-        }}>
-          <button
-            onClick={() => setHeaderCollapsed(false)}
-            className="btn btn-secondary btn-icon"
-            style={{ fontSize: '12px', fontWeight: 'bold' }}
-          >
-            ⛶
-          </button>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {nodeToDelete && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{ maxWidth: 400, width: '100%', border: '1px solid var(--error)' }}>
-            <h2 style={{ marginBottom: '1rem', color: '#ef4444' }}>Prune Branch?</h2>
-            <p style={{ marginBottom: '1.5rem' }}>
-              Are you sure you want to delete the line starting with <strong>{nodeToDelete.move}</strong>?
-              <br /><br />
-              This will remove <strong>{countNodes(findNode(treeData!, nodeToDelete.fen)!)}</strong> moves from your repertoire.
-            </p>
-
-            {treeData && hasDuplicateFen(treeData, nodeToDelete.fen) > 1 && (
-              <div style={{ padding: '0.75rem', backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.2)', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#f59e0b' }}>
-                <strong>Note:</strong> This position appears in other parts of your tree. Deleting this branch only removes this specific history segment.
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                onClick={() => setNodeToDelete(null)}
-                className="btn btn-secondary"
-                style={{ flex: 1 }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="btn btn-danger"
-                style={{ flex: 1, backgroundColor: '#ef4444' }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Editor Body */}
-      <div className="editor-layout">
-        <div className="chess-pane-new" style={{ padding: `${isMobile ? '0.25rem' : '1rem'}` }}>
-          <div className="chess-board-container">
-            {/* Eval Bar Container */}
-            <div
-              onMouseMove={(e) => setMousePos({ x: e.clientX, y: e.clientY, active: true })}
-              onMouseLeave={() => setMousePos(prev => ({ ...prev, active: false }))}
-              className="eval-bar-wrapper"
-              data-tooltip="Engine Evaluation"
-              style={{ width: `${isMobile ? '98%' : '2%'}`, marginBottom: `${isMobile ? '.5rem' : '0rem'}`, marginLeft: `${isMobile ? '.25rem' : '0'}` }}
-            >
-              <div
-                className="eval-bar-bg"
-                style={{
-                  display: 'flex',
-                  flexDirection: window.innerWidth > 768
-                    ? (treeMeta?.color === 'black' ? 'column' : 'column-reverse')
-                    : (treeMeta?.color === 'black' ? 'row' : 'row-reverse'),
-                  justifyContent: 'flex-start'
-                }}
-              >
-                <div
-                  className="eval-bar-fill"
-                  style={{
-                    // On desktop it's height, on mobile it's width
-                    height: window.innerWidth > 768 ? `${whitePercent}%` : '100%',
-                    width: window.innerWidth > 768 ? '100%' : `${whitePercent}%`,
-                    transition: 'all 0.4s ease'
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Dynamic Mouse Tooltip (Desktop only) */}
-            {mousePos.active && window.innerWidth > 768 && (
-              <div style={{
-                position: 'fixed',
-                top: mousePos.y - 35,
-                left: mousePos.x + 15,
-                pointerEvents: 'none',
-                backgroundColor: 'var(--panel-bg)',
-                border: '1px solid var(--border-color-focus)',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                fontSize: '0.8rem',
-                color: 'white',
-                zIndex: 9999,
-                whiteSpace: 'nowrap',
-                boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
-                opacity: 0.95
-              }}>
-                Eval: <strong>{perspScore >= 0 ? '+' : ''}{perspScore.toFixed(2)}</strong>
-                <span style={{ margin: '0 8px', opacity: 0.3 }}>|</span>
-                Best: <strong>{bestMove || '…'}</strong>
-              </div>
-            )}
-
-            {/* Board */}
-            <div style={{ flex: 1 }} ref={boardWrapperRef}>
-              {(() => {
-                const Board = Chessboard as any;
-                return <Board
-                  options={{
-                    position: currentFen,
-                    onPieceDrop,
-                    boardOrientation,
-                    pieces: calientePieces,
-                    darkSquareStyle: boardStyles.darkSquareStyle,
-                    lightSquareStyle: boardStyles.lightSquareStyle,
-                    arrows: arrows,
-                    boardStyle: boardStyles.boardStyle,
-                  }}
-                />;
-              })()}
-            </div>
-          </div>
-
-
-
-        </div>
-
-        {/* Tree pane - with mobile size limits and fullscreen support */}
-        <div
-          className={`tree-pane-new ${treeFullscreen ? 'tree-pane-fullscreen' : ''}`}
-          style={{
-            flex: treeFullscreen ? '1' : undefined,
-            position: treeFullscreen ? 'fixed' : 'relative',
-            top: treeFullscreen ? 0 : undefined,
-            left: treeFullscreen ? 0 : undefined,
-            width: treeFullscreen ? '100vw' : undefined,
-            height: treeFullscreen ? '100vh' : undefined,
-            zIndex: treeFullscreen ? 1000 : undefined,
-            backgroundColor: treeFullscreen ? 'var(--panel-bg)' : undefined,
-            // Mobile size limits
-            maxHeight: isMobile && !treeFullscreen ? '300px' : undefined,
-            minHeight: isMobile && !treeFullscreen ? '200px' : undefined
-          }}
-        >
-          {treeData && (
-            <div style={{
-              width: '100%',
-              height: '100%',
-              position: 'relative',
-              // Add exit button for fullscreen mode
-              display: treeFullscreen ? 'flex' : undefined,
-              flexDirection: treeFullscreen ? 'column' : undefined
-            }}>
-              {treeFullscreen && (
-                <div style={{
-                  position: 'absolute',
-                  top: '10px',
-                  right: '10px',
-                  zIndex: 1001
-                }}>
-                  <button
-                    onClick={() => setTreeFullscreen(false)}
-                    className="btn btn-secondary btn-icon"
-                    style={{
-                      backgroundColor: 'var(--panel-bg)',
-                      border: '1px solid var(--border-color)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                    }}
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-              )}
-              <ForceTree
-                data={treeData}
-                currentFen={currentFen}
-                onNodeClick={handleNodeClick}
-                onNodeUpdate={handleNodeUpdate}
-                isDeleteMode={isDeleteMode}
-                tempTreeData={tempTreeData}
-                isFullscreen={treeFullscreen}
-              />
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Study Selector Modal */}
-      {showStudySelector && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{
-            maxWidth: 700,
-            width: '100%',
-            position: 'relative',
-            maxHeight: isMobile ? '90vh' : '80vh',
-            overflowY: 'auto',
-            margin: isMobile ? '0' : undefined
-          }}>
-            <button onClick={() => setShowStudySelector(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Import size={20} />
-              Import
-            </h2>
+          {/* Chess.com Import Modal */}
+          {showChesscomModal && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem'
+            }}>
+              <div className="card animate-fade-in" style={{
+                maxWidth: 700,
+                width: '100%',
+                position: 'relative',
+                maxHeight: isMobile ? '90vh' : '80vh',
+                overflowY: 'auto',
+                margin: isMobile ? '0' : undefined
+              }}>
+                <button onClick={() => setShowChesscomModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+                  <X size={24} />
+                </button>
+                <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Import size={20} />
+                  Import from Chess.com
+                </h2>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Import options */}
-              <div>
-                <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>Import From</h3>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    onClick={() => {
-                      setShowStudySelector(false);
-                      setShowImportModal(true);
-                      setImportTab('study');
-                    }}
-                    className="btn btn-primary"
-                    style={{ flex: 1 }}
-                  >
-                    Lichess
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowStudySelector(false);
-                      setShowChesscomModal(true);
-                      // Reset state when opening fresh modal but keep current month
-                      setChesscomUsername('');
-                      // Don't reset selectedMonth - keep current month default
-                      setChesscomGames([]);
-                      setSelectedChesscomGames(new Set());
-                      setChesscomImportStatus({ type: '', msg: '' });
-                    }}
-                    className="btn btn-secondary"
-                    style={{ flex: 1 }}
-                  >
-                    Chess.com
-                  </button>
-                </div>
-              </div>
-
-              {/* Imported content - Combined studies and Chess.com games */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
-                    Imported ({cachedStudies.length + cachedChesscomEntries.length})
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
-                      ({cachedStudies.length} studies, {cachedChesscomEntries.length} chess.com)
-                    </span>
-                  </h3>
-                  <button
-                    onClick={() => {
-                      if (confirm('Clear all imported content?')) {
-                        studyCache.clearCache();
-                        chesscomCache.clearCache();
-                        setCachedStudies([]);
-                        setCachedChesscomEntries([]);
-                      }
-                    }}
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem' }}
-                  >
-                    Clear All
-                  </button>
-                </div>
-
-                {(cachedStudies.length === 0 && cachedChesscomEntries.length === 0) ? (
-                  <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
-                    No imported content yet. Import studies or Chess.com games to get started.
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
-                    {/* Render studies first */}
-                    {cachedStudies.map((study) => (
-                      <div
-                        key={study.id}
-                        onClick={() => handleSelectStudy(study)}
-                        style={{
-                          padding: '1rem',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-md)',
-                          cursor: 'pointer',
-                          backgroundColor: 'var(--panel-bg)',
-                          transition: 'all 0.2s ease'
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Username and Month Row */}
+                  <div className="input-group">
+                    <label>Chess.com Username</label>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Enter Chess.com username"
+                        value={chesscomUsername}
+                        onChange={(e) => setChesscomUsername(e.target.value)}
+                        style={{ flex: 1 }}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleFetchChesscomGames();
+                          }
                         }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--accent-color)';
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
-                          e.currentTarget.style.transform = 'translateY(0)';
-                        }}
+                      />
+
+                      {/* Month Selector on the right */}
+                      <MonthPicker
+                        value={selectedMonth}
+                        onChange={setSelectedMonth}
+                        placeholder="Choose a month..."
+                        disabled={isFetchingChesscomGames}
+                      />
+                    </div>
+
+                    {/* Selected month/year display - always show when month is selected */}
+                    {selectedMonth && (
+                      <div style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        marginTop: '0.25rem',
+                        fontStyle: 'italic'
+                      }}>
+                        Importing from: {(() => {
+                          const [year, month] = selectedMonth.split('-');
+                          const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                          return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Fetch/Import Button below everything */}
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <button
+                        onClick={handleFetchChesscomGames}
+                        disabled={isFetchingChesscomGames || !chesscomUsername.trim() || !selectedMonth}
+                        className="btn btn-primary"
+                        style={{ width: '100%' }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                          <div>
-                            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>{study.name}</h4>
-                            <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              {study.chapters.length} chapters
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>• Lichess</span>
-                            </p>
-                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              Imported {new Date(study.cachedAt).toLocaleDateString()}
-                            </p>
+                        {isFetchingChesscomGames ? '...' : 'Fetch'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Status Message */}
+                  {chesscomImportStatus.msg && (
+                    <div style={{
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: chesscomImportStatus.type === 'error' ? 'var(--error-bg)' :
+                        chesscomImportStatus.type === 'success' ? 'var(--success-bg)' :
+                          'var(--info-bg)',
+                      color: chesscomImportStatus.type === 'error' ? 'var(--error-text)' :
+                        chesscomImportStatus.type === 'success' ? 'var(--success-text)' :
+                          'var(--info-text)',
+                      fontSize: '0.9rem',
+                    }}>
+                      {chesscomImportStatus.msg}
+                    </div>
+                  )}
+
+                  {/* Games List */}
+                  {chesscomGames.length > 0 && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div>
+                          <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', margin: 0 }}>
+                            Games
+                          </h3>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            ({selectedChesscomGames.size} selected)
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm(`Remove "${study.name}" from imported studies?`)) {
-                                studyCache.removeStudy(study.id);
-                                loadCachedStudies();
-                                loadCachedChesscomEntries();
+                        </div>
+                        <button
+                          onClick={() => {
+                            const treeColor = treeMeta?.color || 'white';
+                            if (selectedChesscomGames.size === 0) {
+                              // Auto-select games where user played as the tree color
+                              const matchingGames = chesscomGames.filter(game => game.color === treeColor);
+                              setSelectedChesscomGames(new Set(matchingGames.map(g => g.id)));
+                            } else {
+                              setSelectedChesscomGames(new Set());
+                            }
+                          }}
+                          className="btn btn-secondary"
+                          style={{
+                            fontSize: '0.8rem',
+                            padding: '0.5rem',
+                            minWidth: '36px',
+                            height: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title={selectedChesscomGames.size === 0 ? `Select games played as ${treeMeta?.color || 'white'}` : 'Clear selection'}
+                        >
+                          {selectedChesscomGames.size === 0 ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            </svg>
+                          ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                              <polyline points="9 11 12 14 20 6"></polyline>
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+                        {chesscomGames.map((game) => (
+                          <div
+                            key={game.id}
+                            onClick={() => handleToggleChesscomGame(game.id)}
+                            style={{
+                              padding: '1rem',
+                              border: `1px solid ${selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--border-color)'}`,
+                              borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                              backgroundColor: selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--panel-bg)',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!selectedChesscomGames.has(game.id)) {
+                                e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
+                                e.currentTarget.style.transform = 'translateY(-1px)';
                               }
                             }}
-                            className="btn btn-secondary btn-icon"
-                            style={{ padding: '0.25rem' }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Render Chess.com entries */}
-                    {cachedChesscomEntries.map((entry) => (
-                      <div
-                        key={`${entry.username}_${entry.month}`}
-                        onClick={() => handleSelectChesscomEntry(entry)}
-                        style={{
-                          padding: '1rem',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-md)',
-                          cursor: 'pointer',
-                          backgroundColor: 'var(--panel-bg)',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--accent-color)';
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
-                          e.currentTarget.style.transform = 'translateY(0)';
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                          <div>
-                            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
-                              {entry.username} - {new Date(entry.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                            </h4>
-                            <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              {entry.games.length} games
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>• Chess.com</span>
-                            </p>
-                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              Cached {new Date(entry.cachedAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveChesscomEntry(entry);
+                            onMouseLeave={(e) => {
+                              if (!selectedChesscomGames.has(game.id)) {
+                                e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }
                             }}
-                            className="btn btn-secondary btn-icon"
-                            style={{ padding: '0.25rem' }}
                           >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
-              <button
-                onClick={() => setShowStudySelector(false)}
-                className="btn btn-secondary"
-                style={{ flex: 1 }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Chapters Modal */}
-      {showChaptersModal && selectedStudy && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{ maxWidth: 600, width: '100%', position: 'relative', maxHeight: '80vh', overflowY: 'auto' }}>
-            <button onClick={() => setShowChaptersModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Import size={20} />
-              {selectedStudy.name}
-            </h2>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Status Message */}
-              {studyImportStatus.msg && (
-                <div style={{
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: studyImportStatus.type === 'error' ? 'var(--error-bg)' :
-                    studyImportStatus.type === 'success' ? 'var(--success-bg)' :
-                      'var(--info-bg)',
-                  color: studyImportStatus.type === 'error' ? 'var(--error-text)' :
-                    studyImportStatus.type === 'success' ? 'var(--success-text)' :
-                      'var(--info-text)',
-                  fontSize: '0.9rem',
-                }}>
-                  {studyImportStatus.msg}
-                </div>
-              )}
-
-              {/* Chapters List */}
-              {importedStudyChapters.length > 0 && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <div>
-                      <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', margin: 0 }}>
-                        Chapters
-                      </h3>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        ({selectedChapters.size} selected)
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (selectedChapters.size === 0) {
-                          // Select all chapters
-                          setSelectedChapters(new Set(importedStudyChapters.map(chapter => chapter.name)));
-                        } else {
-                          // Clear selection
-                          setSelectedChapters(new Set());
-                        }
-                      }}
-                      className="btn btn-secondary"
-                      style={{
-                        fontSize: '0.8rem',
-                        padding: '0.5rem',
-                        minWidth: '36px',
-                        height: '36px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      title={selectedChapters.size === 0 ? 'Select all chapters' : 'Clear selection'}
-                    >
-                      {selectedChapters.size === 0 ? (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        </svg>
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                          <polyline points="9 11 12 14 20 6"></polyline>
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
-                    {importedStudyChapters.map((chapter, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleToggleChapter(chapter.name)}
-                        style={{
-                          padding: '1rem',
-                          border: `1px solid ${selectedChapters.has(chapter.name) ? 'var(--accent-color)' : 'var(--border-color)'}`,
-                          borderRadius: 'var(--radius-md)',
-                          cursor: 'pointer',
-                          backgroundColor: selectedChapters.has(chapter.name) ? 'var(--accent-color)' : 'var(--panel-bg)',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!selectedChapters.has(chapter.name)) {
-                            e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!selectedChapters.has(chapter.name)) {
-                            e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                          }
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                          <div style={{ flex: 1 }}>
-                            <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>{chapter.name}</h4>
-                            <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              Click to select this chapter for import
-                            </p>
-                          </div>
-                          <div style={{
-                            width: '20px',
-                            height: '20px',
-                            border: `2px solid ${selectedChapters.has(chapter.name) ? 'white' : 'var(--accent-color)'}`,
-                            borderRadius: '4px',
-                            backgroundColor: selectedChapters.has(chapter.name) ? 'var(--accent-color)' : 'transparent',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            {selectedChapters.has(chapter.name) && (
-                              <span style={{ color: 'white', fontSize: '12px' }}>✓</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Import button below Chapters section */}
-                  <div style={{ marginTop: '1rem' }}>
-                    {importedStudyChapters.length > 0 && (
-                      <button
-                        onClick={handleImportSelectedChapters}
-                        disabled={selectedChapters.size === 0}
-                        className="btn btn-primary"
-                        style={{ width: '100%' }}
-                      >
-                        {studyImportStatus.type === 'loading' ? 'Importing...' : `Import ${selectedChapters.size} Selected Chapter${selectedChapters.size !== 1 ? 's' : ''}`}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {importedStudyChapters.length === 0 && (
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
-                  No chapters found in this study.
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Chess.com Import Modal */}
-      {showChesscomModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem'
-        }}>
-          <div className="card animate-fade-in" style={{
-            maxWidth: 700,
-            width: '100%',
-            position: 'relative',
-            maxHeight: isMobile ? '90vh' : '80vh',
-            overflowY: 'auto',
-            margin: isMobile ? '0' : undefined
-          }}>
-            <button onClick={() => setShowChesscomModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-              <X size={24} />
-            </button>
-            <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Import size={20} />
-              Import from Chess.com
-            </h2>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Username and Month Row */}
-              <div className="input-group">
-                <label>Chess.com Username</label>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                  <input
-                    type="text"
-                    className="input"
-                    placeholder="Enter Chess.com username"
-                    value={chesscomUsername}
-                    onChange={(e) => setChesscomUsername(e.target.value)}
-                    style={{ flex: 1 }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handleFetchChesscomGames();
-                      }
-                    }}
-                  />
-
-                  {/* Month Selector on the right */}
-                  <MonthPicker
-                    value={selectedMonth}
-                    onChange={setSelectedMonth}
-                    placeholder="Choose a month..."
-                    disabled={isFetchingChesscomGames}
-                  />
-                </div>
-
-                {/* Selected month/year display - always show when month is selected */}
-                {selectedMonth && (
-                  <div style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    marginTop: '0.25rem',
-                    fontStyle: 'italic'
-                  }}>
-                    Importing from: {(() => {
-                      const [year, month] = selectedMonth.split('-');
-                      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-                      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                    })()}
-                  </div>
-                )}
-
-                {/* Fetch/Import Button below everything */}
-                <div style={{ marginTop: '0.75rem' }}>
-                  <button
-                    onClick={handleFetchChesscomGames}
-                    disabled={isFetchingChesscomGames || !chesscomUsername.trim() || !selectedMonth}
-                    className="btn btn-primary"
-                    style={{ width: '100%' }}
-                  >
-                    {isFetchingChesscomGames ? '...' : 'Fetch'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Message */}
-              {chesscomImportStatus.msg && (
-                <div style={{
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: chesscomImportStatus.type === 'error' ? 'var(--error-bg)' :
-                    chesscomImportStatus.type === 'success' ? 'var(--success-bg)' :
-                      'var(--info-bg)',
-                  color: chesscomImportStatus.type === 'error' ? 'var(--error-text)' :
-                    chesscomImportStatus.type === 'success' ? 'var(--success-text)' :
-                      'var(--info-text)',
-                  fontSize: '0.9rem',
-                }}>
-                  {chesscomImportStatus.msg}
-                </div>
-              )}
-
-              {/* Games List */}
-              {chesscomGames.length > 0 && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <div>
-                      <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', margin: 0 }}>
-                        Games
-                      </h3>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        ({selectedChesscomGames.size} selected)
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const treeColor = treeMeta?.color || 'white';
-                        if (selectedChesscomGames.size === 0) {
-                          // Auto-select games where user played as the tree color
-                          const matchingGames = chesscomGames.filter(game => game.color === treeColor);
-                          setSelectedChesscomGames(new Set(matchingGames.map(g => g.id)));
-                        } else {
-                          setSelectedChesscomGames(new Set());
-                        }
-                      }}
-                      className="btn btn-secondary"
-                      style={{
-                        fontSize: '0.8rem',
-                        padding: '0.5rem',
-                        minWidth: '36px',
-                        height: '36px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      title={selectedChesscomGames.size === 0 ? `Select games played as ${treeMeta?.color || 'white'}` : 'Clear selection'}
-                    >
-                      {selectedChesscomGames.size === 0 ? (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        </svg>
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                          <polyline points="9 11 12 14 20 6"></polyline>
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
-                    {chesscomGames.map((game) => (
-                      <div
-                        key={game.id}
-                        onClick={() => handleToggleChesscomGame(game.id)}
-                        style={{
-                          padding: '1rem',
-                          border: `1px solid ${selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--border-color)'}`,
-                          borderRadius: 'var(--radius-md)',
-                          cursor: 'pointer',
-                          backgroundColor: selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--panel-bg)',
-                          transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!selectedChesscomGames.has(game.id)) {
-                            e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!selectedChesscomGames.has(game.id)) {
-                            e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                          }
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                              <span style={{ fontWeight: 'bold' }}>
-                                {game.white.username} ({game.white.rating}) vs {game.black.username} ({game.black.rating})
-                              </span>
-                              <span style={{
-                                fontSize: '0.8rem',
-                                color: 'var(--text-muted)',
-                                padding: '0.125rem 0.5rem',
-                                backgroundColor: 'var(--border-color)',
-                                borderRadius: 'var(--radius-sm)'
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                                  <span style={{ fontWeight: 'bold' }}>
+                                    {game.white.username} ({game.white.rating}) vs {game.black.username} ({game.black.rating})
+                                  </span>
+                                  <span style={{
+                                    fontSize: '0.8rem',
+                                    color: 'var(--text-muted)',
+                                    padding: '0.125rem 0.5rem',
+                                    backgroundColor: 'var(--border-color)',
+                                    borderRadius: 'var(--radius-sm)'
+                                  }}>
+                                    {game.result}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                  {game.color === 'white' ? 'Played as White' : 'Played as Black'}
+                                  {game.date && ` • ${new Date(game.date).toLocaleDateString()}`}
+                                </div>
+                              </div>
+                              <div style={{
+                                width: '20px',
+                                height: '20px',
+                                border: `2px solid ${selectedChesscomGames.has(game.id) ? 'white' : 'var(--accent-color)'}`,
+                                borderRadius: '4px',
+                                backgroundColor: selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'transparent',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
                               }}>
-                                {game.result}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                              {game.color === 'white' ? 'Played as White' : 'Played as Black'}
-                              {game.date && ` • ${new Date(game.date).toLocaleDateString()}`}
+                                {selectedChesscomGames.has(game.id) && (
+                                  <span style={{ color: 'white', fontSize: '12px' }}>✓</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <div style={{
-                            width: '20px',
-                            height: '20px',
-                            border: `2px solid ${selectedChesscomGames.has(game.id) ? 'white' : 'var(--accent-color)'}`,
-                            borderRadius: '4px',
-                            backgroundColor: selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'transparent',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            {selectedChesscomGames.has(game.id) && (
-                              <span style={{ color: 'white', fontSize: '12px' }}>✓</span>
-                            )}
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
 
-                  {/* Import button below Games section */}
-                  <div style={{ marginTop: '1rem' }}>
-                    {chesscomGames.length > 0 && (
-                      <button
-                        onClick={handleImportSelectedChesscomGames}
-                        disabled={selectedChesscomGames.size === 0 || isFetchingChesscomGames}
-                        className="btn btn-primary"
-                        style={{ width: '100%' }}
-                      >
-                        {isFetchingChesscomGames ? 'Importing...' : `Import ${selectedChesscomGames.size} Selected Game${selectedChesscomGames.size !== 1 ? 's' : ''}`}
-                      </button>
-                    )}
-                  </div>
+                      {/* Import button below Games section */}
+                      <div style={{ marginTop: '1rem' }}>
+                        {chesscomGames.length > 0 && (
+                          <button
+                            onClick={handleImportSelectedChesscomGames}
+                            disabled={selectedChesscomGames.size === 0 || isFetchingChesscomGames}
+                            className="btn btn-primary"
+                            style={{ width: '100%' }}
+                          >
+                            {isFetchingChesscomGames ? 'Importing...' : `Import ${selectedChesscomGames.size} Selected Game${selectedChesscomGames.size !== 1 ? 's' : ''}`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Temporary Changes Notification */}
-      {hasUnsavedChanges && (
-        <div style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          backgroundColor: 'var(--accent-color)',
-          color: 'white',
-          padding: '1rem',
-          borderRadius: 'var(--radius-md)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-          zIndex: 1000,
-          maxWidth: '300px'
-        }}>
-          <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>
-            You have temporary changes. Save or discard them?
-          </p>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              onClick={handleSaveTemporaryChanges}
-              className="btn btn-primary"
-              style={{ fontSize: '0.8rem', flex: 1 }}
-            >
-              Save
-            </button>
-            <button
-              onClick={handleDiscardTemporaryChanges}
-              className="btn btn-secondary"
-              style={{ fontSize: '0.8rem', flex: 1 }}
-            >
-              Discard
-            </button>
-          </div>
-        </div>
+          {/* Temporary Changes Notification */}
+          {hasUnsavedChanges && (
+            <div style={{
+              position: 'fixed',
+              bottom: '20px',
+              right: '20px',
+              backgroundColor: 'var(--accent-color)',
+              color: 'white',
+              padding: '1rem',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              zIndex: 1000,
+              maxWidth: '300px'
+            }}>
+              <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem' }}>
+                You have temporary changes. Save or discard them?
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={handleSaveTemporaryChanges}
+                  className="btn btn-primary"
+                  style={{ fontSize: '0.8rem', flex: 1 }}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleDiscardTemporaryChanges}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.8rem', flex: 1 }}
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useSubscription } from '../hooks/useSubscription';
 import { useToast } from '../components/Toast';
 import { createCheckoutSession, createCustomerPortalSession } from '../lib/stripe';
+import LoadingScreen from '../components/LoadingScreen';
 
 interface Plan {
   id: string;
@@ -26,7 +27,7 @@ const plans: Plan[] = [
       '4 chess trees (5000 nodes each)',
       'Basic PGN import',
       'Tree analysis',
-      'Share trees (read-only)',
+      'Search Community Trees',
       'Unlimited local storage'
     ],
     icon: <Users size={24} />,
@@ -35,14 +36,13 @@ const plans: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 3,
-    yearlyPrice: 30,
+    price: 30,
     priceId: import.meta.env.VITE_STRIPE_PRO_PRICE_ID,
     features: [
-      'Unlimited chess trees',
+      '9 chess trees',
       'Priority support',
-      'Custom themes',
-      'Collaborative editing',
+      'More Depth in trees',
+      'Support the Creator',
     ],
     icon: <Crown size={24} />,
     popular: true,
@@ -63,10 +63,10 @@ export default function Pricing() {
       return;
     }
     if (plan.id === 'free' || !plan.priceId) return;
-    
+
     setSelectedPlan(plan.id);
     setIsProcessing(true);
-    
+
     try {
       const { url } = await createCheckoutSession(plan.priceId, user.id);
       window.location.href = url;
@@ -88,17 +88,10 @@ export default function Pricing() {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <div className="spinner" />
-        <span className="text-muted">Loading pricing...</span>
-      </div>
-    );
-  }
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <LoadingScreen isLoading={loading} />
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'white' }}>
           Choose Your Plan
@@ -155,9 +148,9 @@ export default function Pricing() {
                   <span style={{ fontSize: '2rem', fontWeight: 'bold', color: plan.popular ? 'var(--accent-color)' : 'var(--text-main)' }}>
                     ${plan.price}
                   </span>
-                  <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/month</span>
+                  <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/year</span>
                 </div>
-                {plan.yearlyPrice && (
+                {/* {plan.yearlyPrice && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
                       or ${plan.yearlyPrice}/year
@@ -173,7 +166,7 @@ export default function Pricing() {
                       Save 17%
                     </span>
                   </div>
-                )}
+                )} */}
               </div>
             </div>
 
