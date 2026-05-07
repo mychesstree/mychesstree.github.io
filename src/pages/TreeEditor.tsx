@@ -24,7 +24,7 @@ import PositionPanel from '../components/PositionPanel';
 // Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
   const { user, isGuest, getGuestTree, saveGuestTree } = useAuth();
-  const { subscription, canAddMove, isPro } = useSubscription();
+  const { canAddMove, isPro } = useSubscription();
   const isMobile = useMobile();
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string; study?: string }>();
@@ -2185,7 +2185,7 @@ export default function TreeEditor() {
                 treeId={id!}
                 fen={currentFen}
                 isPublicTree={isPublic}
-                viewOnly={viewOnly}
+              // viewOnly={viewOnly}
               />
 
             </div>

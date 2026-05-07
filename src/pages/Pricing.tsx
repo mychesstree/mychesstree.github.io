@@ -52,7 +52,7 @@ const plans: Plan[] = [
 
 export default function Pricing() {
   const { user } = useAuth();
-  const { subscription, isPro, loading } = useSubscription();
+  const { subscription, loading } = useSubscription();
   const { error } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);

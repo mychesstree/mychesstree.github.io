@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Chess } from 'chess.js';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { MessageSquare, Lightbulb, Send, Trash2, ThumbsUp, ChevronDown, ChevronUp, X, Check, Eye } from 'lucide-react';
+import { MessageSquare, Send, Trash2, ChevronDown, ChevronUp, X, Eye } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,27 +15,26 @@ interface Comment {
     users: { username: string };
 }
 
-interface MoveSuggestion {
-    id: string;
-    tree_id: string;
-    fen: string;
-    user_id: string;
-    move_san: string;
-    move_uci: string;
-    resulting_fen: string;
-    note: string | null;
-    upvotes: number;
-    created_at: string;
-    users: { username: string };
-    move_suggestion_votes?: { user_id: string }[];
-    hasVoted?: boolean;
-}
+// interface MoveSuggestion {
+//     id: string;
+//     tree_id: string;
+//     fen: string;
+//     user_id: string;
+//     move_san: string;
+//     move_uci: string;
+//     resulting_fen: string;
+//     note: string | null;
+//     upvotes: number;
+//     created_at: string;
+//     users: { username: string };
+//     move_suggestion_votes?: { user_id: string }[];
+//     hasVoted?: boolean;
+// }
 
 interface PositionPanelProps {
     treeId: string;
     fen: string;
     isPublicTree: boolean;
-    viewOnly: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,28 +68,6 @@ function Avatar({ username }: { username: string }) {
     );
 }
 
-// ─── Mini board preview for a move suggestion ────────────────────────────────
-
-function MovePreviewBadge({ san, uci }: { san: string; uci: string }) {
-    const from = uci.slice(0, 2);
-    const to = uci.slice(2, 4);
-    return (
-        <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-            padding: '0.2rem 0.6rem',
-            backgroundColor: 'rgba(236,72,153,0.1)',
-            border: '1px solid rgba(236,72,153,0.25)',
-            borderRadius: 6,
-            fontSize: '0.8rem', fontWeight: 700,
-            fontFamily: 'monospace',
-            color: '#ec4899',
-            letterSpacing: '0.04em'
-        }}>
-            <span style={{ opacity: 0.6, fontWeight: 400, fontSize: '0.7rem' }}>{from}→{to}</span>
-            <span>{san}</span>
-        </div>
-    );
-}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -99,13 +75,11 @@ export default function PositionPanel({
     treeId,
     fen,
     isPublicTree,
-    viewOnly,
 }: PositionPanelProps) {
     const { user, isGuest } = useAuth();
     if (!isPublicTree) return null;
 
     // Tab state
-    const [activeTab, setActiveTab] = useState<'comments' | 'suggestions'>('comments');
     const [isExpanded, setIsExpanded] = useState(true);
 
     // Comments
@@ -115,17 +89,12 @@ export default function PositionPanel({
     const [submittingComment, setSubmittingComment] = useState(false);
 
     // Suggestions
-    const [suggestions, setSuggestions] = useState<MoveSuggestion[]>([]);
-    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-    const [suggestionNote, setSuggestionNote] = useState('');
-    const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
-    const [suggestMoveMode, setSuggestMoveMode] = useState(false);
-    const [pendingMove, setPendingMove] = useState<{ san: string; uci: string; resultingFen: string } | null>(null);
+    // const [pendingMove, setPendingMove] = useState<{ san: string; uci: string; resultingFen: string } | null>(null);
 
     // Misc
     const [error, setError] = useState('');
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const suggestTextareaRef = useRef<HTMLTextAreaElement>(null);
+    // const suggestTextareaRef = useRef<HTMLTextAreaElement>(null);
 
     // ── Fetch comments ──────────────────────────────────────────────────────────
     const fetchComments = useCallback(async () => {
@@ -140,34 +109,12 @@ export default function PositionPanel({
         setLoadingComments(false);
     }, [treeId, fen]);
 
-    // ── Fetch suggestions ───────────────────────────────────────────────────────
-    const fetchSuggestions = useCallback(async () => {
-        setLoadingSuggestions(true);
-        const { data } = await supabase
-            .from('move_suggestions')
-            .select('*, users!inner(username), move_suggestion_votes(user_id)')
-            .eq('tree_id', treeId)
-            .eq('fen', fen)
-            .order('upvotes', { ascending: false });
 
-        const enriched = ((data as MoveSuggestion[]) || []).map(s => ({
-            ...s,
-            hasVoted: user ? s.move_suggestion_votes?.some(v => v.user_id === user.id) : false,
-        }));
-        setSuggestions(enriched);
-        setLoadingSuggestions(false);
-    }, [treeId, fen, user]);
-
-    // Re-fetch whenever position changes
     useEffect(() => {
         fetchComments();
-        fetchSuggestions();
         setCommentText('');
-        setSuggestionNote('');
-        setPendingMove(null);
-        setSuggestMoveMode(false);
         setError('');
-    }, [fen, fetchComments, fetchSuggestions]);
+    }, [fen, fetchComments]);
 
     // ── Submit comment ──────────────────────────────────────────────────────────
     const handleSubmitComment = useCallback(async () => {
@@ -195,101 +142,7 @@ export default function PositionPanel({
         fetchComments();
     }, [fetchComments]);
 
-    // ── Intercept a move from board for suggestion ───────────────────────────────
-    // We expose a global callback so TreeEditor can forward a drop to us when in suggest mode
-    useEffect(() => {
-        if (!suggestMoveMode) return;
-        const handler = (e: CustomEvent) => {
-            const { san, uci, resultingFen } = e.detail;
-            setPendingMove({ san, uci, resultingFen });
-            setSuggestMoveMode(false);
-            setTimeout(() => suggestTextareaRef.current?.focus(), 100);
-        };
-        window.addEventListener('positionpanel:movepicked' as any, handler);
-        return () => window.removeEventListener('positionpanel:movepicked' as any, handler);
-    }, [suggestMoveMode]);
 
-    // ── Validate and stage a suggestion move manually ──────────────────────────
-    const handleSuggestMoveFromInput = useCallback((uciOrSan: string) => {
-        try {
-            const chess = new Chess(fen);
-            // Try SAN first, then UCI
-            let moveResult: any = null;
-            try { moveResult = chess.move(uciOrSan); } catch { }
-            if (!moveResult) {
-                try {
-                    moveResult = chess.move({ from: uciOrSan.slice(0, 2), to: uciOrSan.slice(2, 4), promotion: 'q' });
-                } catch { }
-            }
-            if (!moveResult) { setError('Invalid move. Use SAN (e.g. Nf3) or UCI (e.g. g1f3).'); return; }
-            setPendingMove({ san: moveResult.san, uci: moveResult.from + moveResult.to, resultingFen: chess.fen() });
-            setError('');
-        } catch {
-            setError('Invalid move.');
-        }
-    }, [fen]);
-
-    // ── Submit suggestion ───────────────────────────────────────────────────────
-    const handleSubmitSuggestion = useCallback(async () => {
-        if (!pendingMove || !user) return;
-        setSubmittingSuggestion(true);
-        setError('');
-
-        // Check for duplicate
-        const exists = suggestions.some(s => s.move_uci === pendingMove.uci);
-        if (exists) {
-            setError('This move has already been suggested.');
-            setSubmittingSuggestion(false);
-            return;
-        }
-
-        const { error: err } = await supabase.from('move_suggestions').insert({
-            tree_id: treeId,
-            fen,
-            user_id: user.id,
-            move_san: pendingMove.san,
-            move_uci: pendingMove.uci,
-            resulting_fen: pendingMove.resultingFen,
-            note: suggestionNote.trim() || null,
-            upvotes: 0,
-        });
-        if (err) {
-            setError('Failed to submit suggestion.');
-        } else {
-            setPendingMove(null);
-            setSuggestionNote('');
-            fetchSuggestions();
-        }
-        setSubmittingSuggestion(false);
-    }, [pendingMove, user, treeId, fen, suggestions, suggestionNote, fetchSuggestions]);
-
-    // ── Delete suggestion ───────────────────────────────────────────────────────
-    const handleDeleteSuggestion = useCallback(async (id: string) => {
-        await supabase.from('move_suggestions').delete().eq('id', id);
-        fetchSuggestions();
-    }, [fetchSuggestions]);
-
-    // ── Vote on suggestion ──────────────────────────────────────────────────────
-    const handleVote = useCallback(async (suggestion: MoveSuggestion) => {
-        if (!user) return;
-        if (suggestion.hasVoted) {
-            // Unvote
-            await supabase.from('move_suggestion_votes')
-                .delete()
-                .eq('suggestion_id', suggestion.id)
-                .eq('user_id', user.id);
-            await supabase.from('move_suggestions')
-                .update({ upvotes: Math.max(0, suggestion.upvotes - 1) })
-                .eq('id', suggestion.id);
-        } else {
-            await supabase.from('move_suggestion_votes')
-                .insert({ suggestion_id: suggestion.id, user_id: user.id });
-            await supabase.from('move_suggestions')
-                .update({ upvotes: suggestion.upvotes + 1 })
-                .eq('id', suggestion.id);
-        }
-        fetchSuggestions();
-    }, [user, fetchSuggestions]);
 
     // ── Accept suggestion (owner/editor only) ──────────────────────────────────
 
@@ -300,9 +153,6 @@ export default function PositionPanel({
 
     const canPost = !isGuest && !!user;
     const commentCount = comments.length;
-
-    // ── Move input state ────────────────────────────────────────────────────────
-    const [moveInputValue, setMoveInputValue] = useState('');
 
     return (
         <div style={{

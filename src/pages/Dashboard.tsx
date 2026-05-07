@@ -40,7 +40,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError, warning: showWarning } = useToast();
-  const { canCreateTree, treesRemaining, loading: subLoading } = useSubscription();
+  const { canCreateTree, treesRemaining } = useSubscription();
   const [trees, setTrees] = useState<Tree[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
