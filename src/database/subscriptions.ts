@@ -141,6 +141,23 @@ CREATE POLICY "Users can insert own usage" ON subscription_usage
 CREATE POLICY "Users can update own usage" ON subscription_usage
   FOR UPDATE USING (auth.uid() = user_id);
 
+-- Trigger to update tree count automatically
+CREATE OR REPLACE FUNCTION handle_tree_count_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (TG_OP = 'INSERT') THEN
+    PERFORM update_tree_count(NEW.user_id, 1);
+  ELSIF (TG_OP = 'DELETE') THEN
+    PERFORM update_tree_count(OLD.user_id, -1);
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_tree_change
+  AFTER INSERT OR DELETE ON trees
+  FOR EACH ROW EXECUTE FUNCTION handle_tree_count_change();
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer ON subscriptions(stripe_customer_id);

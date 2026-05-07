@@ -15,6 +15,7 @@ import { calculateDuePositions } from '../utils/treeUtils';
 import { useToast } from '../components/Toast';
 import GuidedTour from '../components/GuidedTour';
 import LoadingScreen from '../components/LoadingScreen';
+import { useSubscription } from '../hooks/useSubscription';
 
 interface Tree {
   id: string;
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError, warning: showWarning } = useToast();
+  const { canCreateTree, treesRemaining, loading: subLoading } = useSubscription();
   const [trees, setTrees] = useState<Tree[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -273,6 +275,11 @@ export default function Dashboard() {
     console.log('[DEBUG Dashboard] Tree title validation:', { original: newTitle, sanitized: sanitizedTitle, regex: nameRegex.test(sanitizedTitle) });
     if (!nameRegex.test(sanitizedTitle)) {
       showWarning('Tree name must be 3-20 alphanumeric characters (letters, numbers, and dashes only)');
+      return;
+    }
+
+    if (!isGuest && !canCreateTree()) {
+      showError(`Tree limit reached! You have ${treesRemaining()} trees left. Upgrade to Pro for unlimited trees.`);
       return;
     }
 

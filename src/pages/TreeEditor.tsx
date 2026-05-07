@@ -2186,10 +2186,6 @@ export default function TreeEditor() {
                 fen={currentFen}
                 isPublicTree={isPublic}
                 viewOnly={viewOnly}
-                onSuggestionAccepted={(move) => {
-                  // reuse your existing onPieceDrop logic
-                  onPieceDrop({ sourceSquare: move.uci.slice(0, 2), targetSquare: move.uci.slice(2, 4) });
-                }}
               />
 
             </div>

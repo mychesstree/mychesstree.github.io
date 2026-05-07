@@ -37,7 +37,6 @@ interface PositionPanelProps {
     fen: string;
     isPublicTree: boolean;
     viewOnly: boolean;
-    onSuggestionAccepted?: (move: { san: string; uci: string; resultingFen: string }) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -101,9 +100,9 @@ export default function PositionPanel({
     fen,
     isPublicTree,
     viewOnly,
-    onSuggestionAccepted,
 }: PositionPanelProps) {
     const { user, isGuest } = useAuth();
+    if (!isPublicTree) return null;
 
     // Tab state
     const [activeTab, setActiveTab] = useState<'comments' | 'suggestions'>('comments');
@@ -293,9 +292,6 @@ export default function PositionPanel({
     }, [user, fetchSuggestions]);
 
     // ── Accept suggestion (owner/editor only) ──────────────────────────────────
-    const handleAcceptSuggestion = useCallback((s: MoveSuggestion) => {
-        onSuggestionAccepted?.({ san: s.move_san, uci: s.move_uci, resultingFen: s.resulting_fen });
-    }, [onSuggestionAccepted]);
 
     // ── Keyboard shortcuts ──────────────────────────────────────────────────────
     const handleCommentKeyDown = (e: React.KeyboardEvent) => {
@@ -303,8 +299,7 @@ export default function PositionPanel({
     };
 
     const canPost = !isGuest && !!user;
-    const canAccept = !viewOnly && !!onSuggestionAccepted;
-    const totalActivity = comments.length + suggestions.length;
+    const commentCount = comments.length;
 
     // ── Move input state ────────────────────────────────────────────────────────
     const [moveInputValue, setMoveInputValue] = useState('');
@@ -334,7 +329,7 @@ export default function PositionPanel({
                     <span style={{ fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                         Position Discussion
                     </span>
-                    {totalActivity > 0 && (
+                    {commentCount > 0 && (
                         <span style={{
                             fontSize: '0.68rem', fontWeight: 700,
                             backgroundColor: 'rgba(236,72,153,0.15)',
@@ -342,7 +337,7 @@ export default function PositionPanel({
                             padding: '0.1rem 0.45rem',
                             borderRadius: 10,
                             border: '1px solid rgba(236,72,153,0.25)',
-                        }}>{totalActivity}</span>
+                        }}>{commentCount}</span>
                     )}
                 </div>
                 {isExpanded ? <ChevronUp size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />}
@@ -350,64 +345,6 @@ export default function PositionPanel({
 
             {isExpanded && (
                 <div style={{ padding: '0 0.75rem 0.75rem' }}>
-
-                    {/* ── Tab Bar ── */}
-                    <div style={{
-                        display: 'flex',
-                        gap: 0,
-                        marginBottom: '0.75rem',
-                        backgroundColor: 'rgba(255,255,255,0.04)',
-                        borderRadius: 8,
-                        padding: '0.2rem',
-                        border: '1px solid var(--border-color)',
-                    }}>
-                        {(['comments', 'suggestions'] as const).map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                style={{
-                                    flex: 1,
-                                    padding: '0.35rem 0.5rem',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    cursor: 'pointer',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 600,
-                                    letterSpacing: '0.04em',
-                                    transition: 'all 0.15s ease',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '0.35rem',
-                                    backgroundColor: activeTab === tab ? 'var(--accent-color)' : 'transparent',
-                                    color: activeTab === tab ? '#fff' : 'var(--text-muted)',
-                                }}
-                            >
-                                {tab === 'comments' ? <MessageSquare size={12} /> : <Lightbulb size={12} />}
-                                {tab === 'comments' ? 'Comments' : 'Suggestions'}
-                                {tab === 'comments' && comments.length > 0 && (
-                                    <span style={{
-                                        fontSize: '0.65rem',
-                                        backgroundColor: activeTab === 'comments' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
-                                        borderRadius: 8,
-                                        padding: '0 0.3rem',
-                                        minWidth: 16,
-                                        textAlign: 'center',
-                                    }}>{comments.length}</span>
-                                )}
-                                {tab === 'suggestions' && suggestions.length > 0 && (
-                                    <span style={{
-                                        fontSize: '0.65rem',
-                                        backgroundColor: activeTab === 'suggestions' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
-                                        borderRadius: 8,
-                                        padding: '0 0.3rem',
-                                        minWidth: 16,
-                                        textAlign: 'center',
-                                    }}>{suggestions.length}</span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
 
                     {/* ── Error Banner ── */}
                     {error && (
@@ -431,422 +368,137 @@ export default function PositionPanel({
                     )}
 
                     {/* ════════════════════════════════════════════════════════
-              COMMENTS TAB
+              COMMENTS SECTION
           ════════════════════════════════════════════════════════ */}
-                    {activeTab === 'comments' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
 
-                            {/* Comment list */}
-                            {loadingComments ? (
-                                <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                    <div style={{ width: 20, height: 20, border: '2px solid var(--border-color)', borderTopColor: 'var(--accent-color)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 0.5rem' }} />
-                                    Loading…
-                                </div>
-                            ) : comments.length === 0 ? (
-                                <div style={{
-                                    padding: '1.5rem 1rem',
-                                    textAlign: 'center',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '0.78rem',
-                                    backgroundColor: 'rgba(255,255,255,0.02)',
-                                    borderRadius: 8,
-                                    border: '1px dashed var(--border-color)',
-                                }}>
-                                    <MessageSquare size={20} style={{ marginBottom: '0.5rem', opacity: 0.3 }} />
-                                    <div>No comments on this position yet.</div>
-                                    {!canPost && <div style={{ marginTop: '0.25rem', opacity: 0.6 }}>Sign in to be the first!</div>}
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
-                                    {comments.map(c => (
-                                        <div key={c.id} style={{
-                                            padding: '0.6rem 0.75rem',
-                                            backgroundColor: 'rgba(255,255,255,0.03)',
-                                            borderRadius: 8,
-                                            border: '1px solid var(--border-color)',
-                                            transition: 'border-color 0.15s',
-                                        }}
-                                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
-                                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    <Avatar username={c.users?.username || '?'} />
-                                                    <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{c.users?.username}</span>
-                                                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{timeAgo(c.created_at)}</span>
-                                                </div>
-                                                {user?.id === c.user_id && (
-                                                    <button
-                                                        onClick={() => handleDeleteComment(c.id)}
-                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.1rem', opacity: 0.5, transition: 'opacity 0.15s' }}
-                                                        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                                                        onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
-                                                    >
-                                                        <Trash2 size={11} />
-                                                    </button>
-                                                )}
+                        {/* Comment list */}
+                        {loadingComments ? (
+                            <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                <div style={{ width: 20, height: 20, border: '2px solid var(--border-color)', borderTopColor: 'var(--accent-color)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 0.5rem' }} />
+                                Loading…
+                            </div>
+                        ) : comments.length === 0 ? (
+                            <div style={{
+                                padding: '1.5rem 1rem',
+                                textAlign: 'center',
+                                color: 'var(--text-muted)',
+                                fontSize: '0.78rem',
+                                backgroundColor: 'rgba(255,255,255,0.02)',
+                                borderRadius: 8,
+                                border: '1px dashed var(--border-color)',
+                            }}>
+                                <MessageSquare size={20} style={{ marginBottom: '0.5rem', opacity: 0.3 }} />
+                                <div>No comments on this position yet.</div>
+                                {!canPost && <div style={{ marginTop: '0.25rem', opacity: 0.6 }}>Sign in to be the first!</div>}
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
+                                {comments.map(c => (
+                                    <div key={c.id} style={{
+                                        padding: '0.6rem 0.75rem',
+                                        backgroundColor: 'rgba(255,255,255,0.03)',
+                                        borderRadius: 8,
+                                        border: '1px solid var(--border-color)',
+                                        transition: 'border-color 0.15s',
+                                    }}
+                                        onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+                                        onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Avatar username={c.users?.username || '?'} />
+                                                <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{c.users?.username}</span>
+                                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{timeAgo(c.created_at)}</span>
                                             </div>
-                                            <p style={{ margin: 0, fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-main)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                                                {c.content}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Comment composer */}
-                            {canPost ? (
-                                <div style={{
-                                    marginTop: '0.25rem',
-                                    backgroundColor: 'rgba(255,255,255,0.03)',
-                                    borderRadius: 8,
-                                    border: '1px solid var(--border-color)',
-                                    overflow: 'hidden',
-                                    transition: 'border-color 0.15s',
-                                }}
-                                    onFocusCapture={e => (e.currentTarget.style.borderColor = 'var(--accent-color)')}
-                                    onBlurCapture={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}
-                                >
-                                    <textarea
-                                        ref={textareaRef}
-                                        value={commentText}
-                                        onChange={e => setCommentText(e.target.value)}
-                                        onKeyDown={handleCommentKeyDown}
-                                        placeholder="Add a comment on this position… (⌘↵ to send)"
-                                        rows={2}
-                                        style={{
-                                            width: '100%',
-                                            background: 'none',
-                                            border: 'none',
-                                            outline: 'none',
-                                            resize: 'none',
-                                            padding: '0.6rem 0.75rem',
-                                            fontSize: '0.82rem',
-                                            color: 'var(--text-main)',
-                                            fontFamily: 'inherit',
-                                            lineHeight: 1.5,
-                                            boxSizing: 'border-box',
-                                        }}
-                                    />
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.25rem 0.5rem', borderTop: '1px solid var(--border-color)' }}>
-                                        <button
-                                            onClick={handleSubmitComment}
-                                            disabled={!commentText.trim() || submittingComment}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.35rem',
-                                                padding: '0.3rem 0.75rem',
-                                                backgroundColor: commentText.trim() ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)',
-                                                color: commentText.trim() ? '#fff' : 'var(--text-muted)',
-                                                border: 'none', borderRadius: 6, cursor: commentText.trim() ? 'pointer' : 'default',
-                                                fontSize: '0.75rem', fontWeight: 600,
-                                                transition: 'all 0.15s',
-                                                opacity: submittingComment ? 0.6 : 1,
-                                            }}
-                                        >
-                                            <Send size={11} />
-                                            {submittingComment ? 'Posting…' : 'Post'}
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div style={{
-                                    padding: '0.5rem 0.75rem',
-                                    fontSize: '0.75rem',
-                                    color: 'var(--text-muted)',
-                                    textAlign: 'center',
-                                    backgroundColor: 'rgba(255,255,255,0.02)',
-                                    borderRadius: 8,
-                                    border: '1px solid var(--border-color)',
-                                }}>
-                                    <Eye size={12} style={{ marginRight: '0.3rem', verticalAlign: 'middle' }} />
-                                    Sign in to comment on positions
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* ════════════════════════════════════════════════════════
-              SUGGESTIONS TAB
-          ════════════════════════════════════════════════════════ */}
-                    {activeTab === 'suggestions' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-
-                            {/* Suggestion list */}
-                            {loadingSuggestions ? (
-                                <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                    <div style={{ width: 20, height: 20, border: '2px solid var(--border-color)', borderTopColor: 'var(--accent-color)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 0.5rem' }} />
-                                    Loading…
-                                </div>
-                            ) : suggestions.length === 0 ? (
-                                <div style={{
-                                    padding: '1.5rem 1rem',
-                                    textAlign: 'center',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '0.78rem',
-                                    backgroundColor: 'rgba(255,255,255,0.02)',
-                                    borderRadius: 8,
-                                    border: '1px dashed var(--border-color)',
-                                }}>
-                                    <Lightbulb size={20} style={{ marginBottom: '0.5rem', opacity: 0.3 }} />
-                                    <div>No move suggestions yet.</div>
-                                    {!canPost && <div style={{ marginTop: '0.25rem', opacity: 0.6 }}>Sign in to suggest a move!</div>}
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
-                                    {suggestions.map(s => (
-                                        <div key={s.id} style={{
-                                            padding: '0.6rem 0.75rem',
-                                            backgroundColor: 'rgba(255,255,255,0.03)',
-                                            borderRadius: 8,
-                                            border: '1px solid var(--border-color)',
-                                            transition: 'border-color 0.15s',
-                                        }}
-                                            onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
-                                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}
-                                        >
-                                            {/* Header row */}
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                                    <Avatar username={s.users?.username || '?'} />
-                                                    <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{s.users?.username}</span>
-                                                    <MovePreviewBadge san={s.move_san} uci={s.move_uci} />
-                                                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{timeAgo(s.created_at)}</span>
-                                                </div>
-
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                    {/* Accept button for owner */}
-                                                    {canAccept && (
-                                                        <button
-                                                            onClick={() => handleAcceptSuggestion(s)}
-                                                            title="Accept this suggestion and add it to the tree"
-                                                            style={{
-                                                                display: 'flex', alignItems: 'center', gap: '0.25rem',
-                                                                padding: '0.2rem 0.5rem',
-                                                                backgroundColor: 'rgba(16,185,129,0.12)',
-                                                                border: '1px solid rgba(16,185,129,0.3)',
-                                                                borderRadius: 5, cursor: 'pointer',
-                                                                color: '#10b981', fontSize: '0.7rem', fontWeight: 600,
-                                                                transition: 'all 0.15s',
-                                                            }}
-                                                            onMouseEnter={e => {
-                                                                e.currentTarget.style.backgroundColor = 'rgba(16,185,129,0.25)';
-                                                                e.currentTarget.style.borderColor = '#10b981';
-                                                            }}
-                                                            onMouseLeave={e => {
-                                                                e.currentTarget.style.backgroundColor = 'rgba(16,185,129,0.12)';
-                                                                e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)';
-                                                            }}
-                                                        >
-                                                            <Check size={11} /> Accept
-                                                        </button>
-                                                    )}
-
-                                                    {/* Vote button */}
-                                                    <button
-                                                        onClick={() => canPost && handleVote(s)}
-                                                        disabled={!canPost}
-                                                        title={canPost ? (s.hasVoted ? 'Remove vote' : 'Upvote') : 'Sign in to vote'}
-                                                        style={{
-                                                            display: 'flex', alignItems: 'center', gap: '0.25rem',
-                                                            padding: '0.2rem 0.5rem',
-                                                            backgroundColor: s.hasVoted ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.05)',
-                                                            border: `1px solid ${s.hasVoted ? 'rgba(236,72,153,0.4)' : 'var(--border-color)'}`,
-                                                            borderRadius: 5, cursor: canPost ? 'pointer' : 'default',
-                                                            color: s.hasVoted ? '#ec4899' : 'var(--text-muted)',
-                                                            fontSize: '0.72rem', fontWeight: 600,
-                                                            transition: 'all 0.15s',
-                                                        }}
-                                                    >
-                                                        <ThumbsUp size={11} /> {s.upvotes}
-                                                    </button>
-
-                                                    {/* Delete own */}
-                                                    {user?.id === s.user_id && (
-                                                        <button
-                                                            onClick={() => handleDeleteSuggestion(s.id)}
-                                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.1rem', opacity: 0.5, transition: 'opacity 0.15s' }}
-                                                            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                                                            onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
-                                                        >
-                                                            <Trash2 size={11} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Optional note */}
-                                            {s.note && (
-                                                <p style={{ margin: '0 0 0 0', fontSize: '0.8rem', lineHeight: 1.5, color: 'var(--text-main)', opacity: 0.85, paddingLeft: '2rem' }}>
-                                                    {s.note}
-                                                </p>
+                                            {user?.id === c.user_id && (
+                                                <button
+                                                    onClick={() => handleDeleteComment(c.id)}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.1rem', opacity: 0.5, transition: 'opacity 0.15s' }}
+                                                    onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                                                    onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
                                             )}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+                                        <p style={{ margin: 0, fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-main)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                            {c.content}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
-                            {/* Suggestion composer */}
-                            {canPost ? (
-                                <div style={{ marginTop: '0.25rem' }}>
-                                    {/* Step 1: pick a move */}
-                                    {!pendingMove ? (
-                                        <div style={{
-                                            backgroundColor: 'rgba(255,255,255,0.03)',
-                                            borderRadius: 8,
-                                            border: '1px solid var(--border-color)',
-                                            padding: '0.6rem 0.75rem',
-                                        }}>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 500 }}>
-                                                Enter a move to suggest (SAN or UCI):
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                                <input
-                                                    type="text"
-                                                    value={moveInputValue}
-                                                    onChange={e => setMoveInputValue(e.target.value)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter' && moveInputValue.trim()) {
-                                                            handleSuggestMoveFromInput(moveInputValue.trim());
-                                                            setMoveInputValue('');
-                                                        }
-                                                    }}
-                                                    placeholder="e.g. Nf3 or g1f3"
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '0.4rem 0.6rem',
-                                                        backgroundColor: 'rgba(255,255,255,0.05)',
-                                                        border: '1px solid var(--border-color)',
-                                                        borderRadius: 6,
-                                                        color: 'var(--text-main)',
-                                                        fontSize: '0.82rem',
-                                                        fontFamily: 'monospace',
-                                                        outline: 'none',
-                                                    }}
-                                                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent-color)')}
-                                                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        if (moveInputValue.trim()) {
-                                                            handleSuggestMoveFromInput(moveInputValue.trim());
-                                                            setMoveInputValue('');
-                                                        }
-                                                    }}
-                                                    disabled={!moveInputValue.trim()}
-                                                    style={{
-                                                        padding: '0.4rem 0.75rem',
-                                                        backgroundColor: moveInputValue.trim() ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)',
-                                                        color: moveInputValue.trim() ? '#fff' : 'var(--text-muted)',
-                                                        border: 'none', borderRadius: 6, cursor: moveInputValue.trim() ? 'pointer' : 'default',
-                                                        fontSize: '0.75rem', fontWeight: 600,
-                                                        transition: 'all 0.15s',
-                                                    }}
-                                                >
-                                                    Stage
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        /* Step 2: confirm + add note */
-                                        <div style={{
-                                            backgroundColor: 'rgba(236,72,153,0.05)',
-                                            borderRadius: 8,
-                                            border: '1px solid rgba(236,72,153,0.25)',
-                                            overflow: 'hidden',
-                                        }}>
-                                            {/* Move preview header */}
-                                            <div style={{
-                                                padding: '0.5rem 0.75rem',
-                                                borderBottom: '1px solid rgba(236,72,153,0.15)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>Suggesting:</span>
-                                                    <MovePreviewBadge san={pendingMove.san} uci={pendingMove.uci} />
-                                                </div>
-                                                <button
-                                                    onClick={() => { setPendingMove(null); setMoveInputValue(''); }}
-                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
-                                                >
-                                                    <X size={13} />
-                                                </button>
-                                            </div>
-
-                                            {/* Note textarea */}
-                                            <textarea
-                                                ref={suggestTextareaRef}
-                                                value={suggestionNote}
-                                                onChange={e => setSuggestionNote(e.target.value)}
-                                                placeholder="Add a note explaining this move… (optional)"
-                                                rows={2}
-                                                style={{
-                                                    width: '100%',
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    outline: 'none',
-                                                    resize: 'none',
-                                                    padding: '0.6rem 0.75rem',
-                                                    fontSize: '0.82rem',
-                                                    color: 'var(--text-main)',
-                                                    fontFamily: 'inherit',
-                                                    lineHeight: 1.5,
-                                                    boxSizing: 'border-box',
-                                                }}
-                                            />
-
-                                            {/* Submit row */}
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', padding: '0.3rem 0.5rem', borderTop: '1px solid rgba(236,72,153,0.15)' }}>
-                                                <button
-                                                    onClick={() => { setPendingMove(null); setMoveInputValue(''); }}
-                                                    style={{
-                                                        padding: '0.3rem 0.65rem',
-                                                        backgroundColor: 'transparent',
-                                                        border: '1px solid var(--border-color)',
-                                                        borderRadius: 6, cursor: 'pointer',
-                                                        fontSize: '0.75rem', color: 'var(--text-muted)',
-                                                    }}
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={handleSubmitSuggestion}
-                                                    disabled={submittingSuggestion}
-                                                    style={{
-                                                        display: 'flex', alignItems: 'center', gap: '0.35rem',
-                                                        padding: '0.3rem 0.75rem',
-                                                        backgroundColor: '#ec4899',
-                                                        color: '#fff',
-                                                        border: 'none', borderRadius: 6, cursor: 'pointer',
-                                                        fontSize: '0.75rem', fontWeight: 600,
-                                                        opacity: submittingSuggestion ? 0.6 : 1,
-                                                        transition: 'all 0.15s',
-                                                    }}
-                                                >
-                                                    <Lightbulb size={11} />
-                                                    {submittingSuggestion ? 'Submitting…' : 'Suggest Move'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
+                        {/* Comment composer */}
+                        {canPost ? (
+                            <div style={{
+                                marginTop: '0.25rem',
+                                backgroundColor: 'rgba(255,255,255,0.03)',
+                                borderRadius: 8,
+                                border: '1px solid var(--border-color)',
+                                overflow: 'hidden',
+                                transition: 'border-color 0.15s',
+                            }}
+                                onFocusCapture={e => (e.currentTarget.style.borderColor = 'var(--accent-color)')}
+                                onBlurCapture={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+                            >
+                                <textarea
+                                    ref={textareaRef}
+                                    value={commentText}
+                                    onChange={e => setCommentText(e.target.value)}
+                                    onKeyDown={handleCommentKeyDown}
+                                    placeholder="Add a comment on this position… (⌘↵ to send)"
+                                    rows={2}
+                                    style={{
+                                        width: '100%',
+                                        background: 'none',
+                                        border: 'none',
+                                        outline: 'none',
+                                        resize: 'none',
+                                        padding: '0.6rem 0.75rem',
+                                        fontSize: '0.82rem',
+                                        color: 'var(--text-main)',
+                                        fontFamily: 'inherit',
+                                        lineHeight: 1.5,
+                                        boxSizing: 'border-box',
+                                    }}
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.25rem 0.5rem' }}>
+                                    <button
+                                        onClick={handleSubmitComment}
+                                        disabled={!commentText.trim() || submittingComment}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.35rem',
+                                            padding: '0.3rem 0.75rem',
+                                            backgroundColor: commentText.trim() ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)',
+                                            color: commentText.trim() ? '#fff' : 'var(--text-muted)',
+                                            border: 'none', borderRadius: 6, cursor: commentText.trim() ? 'pointer' : 'default',
+                                            fontSize: '0.75rem', fontWeight: 600,
+                                            transition: 'all 0.15s',
+                                            opacity: submittingComment ? 0.6 : 1,
+                                        }}
+                                    >
+                                        <Send size={11} />
+                                        {submittingComment ? 'Posting…' : 'Post'}
+                                    </button>
                                 </div>
-                            ) : (
-                                <div style={{
-                                    padding: '0.5rem 0.75rem',
-                                    fontSize: '0.75rem',
-                                    color: 'var(--text-muted)',
-                                    textAlign: 'center',
-                                    backgroundColor: 'rgba(255,255,255,0.02)',
-                                    borderRadius: 8,
-                                    border: '1px solid var(--border-color)',
-                                }}>
-                                    <Eye size={12} style={{ marginRight: '0.3rem', verticalAlign: 'middle' }} />
-                                    Sign in to suggest moves
-                                </div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        ) : (
+                            <div style={{
+                                padding: '0.5rem 0.75rem',
+                                fontSize: '0.75rem',
+                                color: 'var(--text-muted)',
+                                textAlign: 'center',
+                                backgroundColor: 'rgba(255,255,255,0.02)',
+                                borderRadius: 8,
+                                border: '1px solid var(--border-color)',
+                            }}>
+                                <Eye size={12} style={{ marginRight: '0.3rem', verticalAlign: 'middle' }} />
+                                Sign in to comment on positions
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 

@@ -37,7 +37,7 @@ const plans: Plan[] = [
     id: 'pro',
     name: 'Pro',
     price: 30,
-    priceId: import.meta.env.VITE_STRIPE_PRO_PRICE_ID,
+    priceId: "price_1TONzeF03se6tfgAATmf1a87",
     features: [
       '9 chess trees',
       'Priority support',
@@ -52,17 +52,24 @@ const plans: Plan[] = [
 
 export default function Pricing() {
   const { user } = useAuth();
-  const { isPro, loading } = useSubscription();
+  const { subscription, isPro, loading } = useSubscription();
   const { error } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const hasStripeCustomer = !!subscription?.stripe_customer_id;
 
   const handleSubscribe = async (plan: Plan) => {
     if (!user) {
       error('Please sign in to subscribe');
       return;
     }
-    if (plan.id === 'free' || !plan.priceId) return;
+    if (plan.id === 'free') return;
+
+    if (!plan.priceId) {
+      error('Subscription configuration missing (Price ID). Please check your environment variables.');
+      return;
+    }
 
     setSelectedPlan(plan.id);
     setIsProcessing(true);
@@ -80,11 +87,16 @@ export default function Pricing() {
 
   const handleManageSubscription = async () => {
     if (!user) return;
+    setIsProcessing(true);
+    setSelectedPlan('pro');
     try {
       const { url } = await createCustomerPortalSession(user.id);
       window.location.href = url;
     } catch (err) {
       error('Failed to open subscription portal. Please try again.');
+    } finally {
+      setIsProcessing(false);
+      setSelectedPlan(null);
     }
   };
 
@@ -189,7 +201,7 @@ export default function Pricing() {
 
             <button
               onClick={() => {
-                if (isPro() && plan.id === 'pro') {
+                if (plan.id === 'pro' && hasStripeCustomer) {
                   handleManageSubscription();
                 } else if (plan.id !== 'free') {
                   handleSubscribe(plan);
@@ -203,7 +215,7 @@ export default function Pricing() {
                   <div className="spinner" style={{ width: '16px', height: '16px' }} />
                   Processing...
                 </div>
-              ) : isPro() && plan.id === 'pro' ? (
+              ) : plan.id === 'pro' && hasStripeCustomer ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <CreditCard size={16} />
                   Manage Subscription
