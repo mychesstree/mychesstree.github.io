@@ -24,11 +24,10 @@ const plans: Plan[] = [
     name: 'Free',
     price: 0,
     features: [
-      '4 chess trees (5000 nodes each)',
-      'Basic PGN import',
-      'Tree analysis',
-      'Search Community Trees',
-      'Unlimited local storage'
+      '4 cloud trees',
+      '24 moves of depth per tree',
+      'PGN import & analysis',
+      'Search community trees',
     ],
     icon: <Users size={24} />,
     color: '#6b7280'
@@ -39,10 +38,10 @@ const plans: Plan[] = [
     price: 30,
     priceId: "price_1TONzeF03se6tfgAATmf1a87",
     features: [
-      '9 chess trees',
+      '9 cloud trees',
+      '36 moves of depth per tree',
       'Priority support',
-      'More Depth in trees',
-      'Support the Creator',
+      'Support the creator ❤️',
     ],
     icon: <Crown size={24} />,
     popular: true,
@@ -52,11 +51,12 @@ const plans: Plan[] = [
 
 export default function Pricing() {
   const { user } = useAuth();
-  const { subscription, loading } = useSubscription();
+  const { subscription, loading, isPro, refreshSubscription } = useSubscription();
   const { error } = useToast();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const isCurrentlyPro = isPro();
   const hasStripeCustomer = !!subscription?.stripe_customer_id;
 
   const handleSubscribe = async (plan: Plan) => {
@@ -97,6 +97,8 @@ export default function Pricing() {
     } finally {
       setIsProcessing(false);
       setSelectedPlan(null);
+      // Refresh subscription in case they made changes in portal
+      refreshSubscription();
     }
   };
 
@@ -201,12 +203,15 @@ export default function Pricing() {
 
             <button
               onClick={() => {
-                if (plan.id === 'pro' && hasStripeCustomer) {
+                if (plan.id === 'pro' && isCurrentlyPro) {
+                  handleManageSubscription();
+                } else if (plan.id === 'pro' && hasStripeCustomer) {
                   handleManageSubscription();
                 } else if (plan.id !== 'free') {
                   handleSubscribe(plan);
                 }
               }}
+              disabled={plan.id === 'free' || (plan.id === 'pro' && isCurrentlyPro && !hasStripeCustomer)}
               className={`btn ${plan.popular ? 'btn-primary' : 'btn-secondary'}`}
               style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 'bold' }}
             >
@@ -215,13 +220,23 @@ export default function Pricing() {
                   <div className="spinner" style={{ width: '16px', height: '16px' }} />
                   Processing...
                 </div>
+              ) : plan.id === 'pro' && isCurrentlyPro ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Crown size={16} />
+                  {hasStripeCustomer ? 'Manage Subscription' : 'Current Plan'}
+                </div>
+              ) : plan.id === 'free' && !isCurrentlyPro ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Check size={16} />
+                  Current Plan
+                </div>
               ) : plan.id === 'pro' && hasStripeCustomer ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <CreditCard size={16} />
                   Manage Subscription
                 </div>
               ) : plan.id === 'free' ? (
-                'Current Plan'
+                'Free Plan'
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Zap size={16} />

@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreHorizontal, Trash2, HelpCircle } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreVertical, Trash2, HelpCircle } from 'lucide-react';
 import StarButton from '../components/StarButton';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
@@ -16,6 +16,7 @@ import { useToast } from '../components/Toast';
 import GuidedTour from '../components/GuidedTour';
 import LoadingScreen from '../components/LoadingScreen';
 import { useSubscription } from '../hooks/useSubscription';
+import ProSuccessModal from '../components/ProSuccessModal';
 
 interface Tree {
   id: string;
@@ -38,10 +39,12 @@ export default function Dashboard() {
   const { user, isGuest, loadGuestTrees, saveGuestTree, loadGuestReviews } = useAuth();
   const isMobile = useMobile();
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError, warning: showWarning } = useToast();
-  const { canCreateTree, treesRemaining } = useSubscription();
+  const { canCreateTree, refreshSubscription } = useSubscription();
   const [trees, setTrees] = useState<Tree[]>([]);
+  const [showProSuccess, setShowProSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -65,10 +68,28 @@ export default function Dashboard() {
     // Check if user has seen the tour
     const hasSeenTour = localStorage.getItem('chesstr.ee_tour_seen');
     if (!hasSeenTour) {
-      // Delay slightly to ensure layout is ready
       setTimeout(() => setShowTour(true), 1500);
     }
   }, []);
+
+  // Detect Stripe success redirect and poll until subscription upgrades
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('success') !== 'true') return;
+
+    // Clear the query param from the URL without re-navigating
+    window.history.replaceState(null, '', window.location.pathname + window.location.hash.replace(/\?.*$/, ''));
+
+    // Show modal immediately, then poll for Pro status (webhook may take a few seconds)
+    setShowProSuccess(true);
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      refreshSubscription();
+      if (attempts >= 10) clearInterval(poll); // give up after ~20s
+    }, 2000);
+    return () => clearInterval(poll);
+  }, [location.search, refreshSubscription]);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -279,7 +300,7 @@ export default function Dashboard() {
     }
 
     if (!isGuest && !canCreateTree()) {
-      showError(`Tree limit reached! You have ${treesRemaining()} trees left. Upgrade to Pro for unlimited trees.`);
+      showError(`Tree limit reached! Free plan allows 4 trees, Pro allows 9. Upgrade on the Pricing page.`);
       return;
     }
 
@@ -314,9 +335,17 @@ export default function Dashboard() {
       .single();
 
     if (!error && data) {
+      // Refresh subscription count so UI reflects the new tree
+      refreshSubscription();
       navigate(`/editor/${data.id}`);
     } else {
-      showError('Failed to create tree');
+      // Surface the DB error (e.g., tree limit exceeded by trigger)
+      const msg = (error as any)?.message || '';
+      if (msg.toLowerCase().includes('limit exceeded')) {
+        showError('Tree limit reached! Upgrade to Pro on the Pricing page.');
+      } else {
+        showError('Failed to create tree. Please try again.');
+      }
     }
   };
 
@@ -491,6 +520,9 @@ export default function Dashboard() {
   return (
     <>
       <LoadingScreen isLoading={loading} />
+      {showProSuccess && (
+        <ProSuccessModal onClose={() => setShowProSuccess(false)} />
+      )}
       <CreateTreeModal
         isOpen={isCreating}
         onClose={() => setIsCreating(false)}
@@ -832,7 +864,7 @@ export default function Dashboard() {
                             style={{
                               background: 'none',
                               border: 'none',
-                              padding: '4px',
+                              padding: '2px',
                               cursor: 'pointer',
                               color: 'var(--text-muted)',
                               borderRadius: '4px',
@@ -842,62 +874,62 @@ export default function Dashboard() {
                             }}
                             className="hover-bg"
                           >
-                            <MoreHorizontal size={16} />
+                            <MoreVertical size={16} />
                           </button>
 
-                        {activeDropdown === tree.id && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              position: 'absolute',
-                              top: '100%',
-                              right: 0,
-                              marginTop: '4px',
-                              backgroundColor: 'var(--panel-bg)',
-                              border: '1px solid var(--border-color)',
-                              borderRadius: 'var(--radius-md)',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                              zIndex: 1000,
-                              minWidth: '200px'
-                            }}>
-                            <div style={{ padding: '8px 0' }}>
-                              <div style={{
-                                padding: '8px 16px',
-                                fontSize: '0.8rem',
-                                color: 'var(--text-muted)',
-                                borderBottom: '1px solid var(--border-color)',
-                                marginBottom: '4px'
+                          {activeDropdown === tree.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                position: 'absolute',
+                                top: '100%',
+                                right: 0,
+                                marginTop: '4px',
+                                backgroundColor: 'var(--panel-bg)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 'var(--radius-md)',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                zIndex: 1000,
+                                minWidth: '200px'
                               }}>
-                                Created: {new Date(tree.created_at).toLocaleDateString()}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setDeleteConfirm(tree.id);
-                                  setActiveDropdown(null);
-                                }}
-                                style={{
-                                  width: '100%',
+                              <div style={{ padding: '8px 0' }}>
+                                <div style={{
                                   padding: '8px 16px',
-                                  background: 'none',
-                                  border: 'none',
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                  color: '#ef4444',
-                                  fontSize: '0.9rem',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                              >
-                                <Trash2 size={14} />
-                                Delete Tree
-                              </button>
+                                  fontSize: '0.8rem',
+                                  color: 'var(--text-muted)',
+                                  borderBottom: '1px solid var(--border-color)',
+                                  marginBottom: '4px'
+                                }}>
+                                  Created: {new Date(tree.created_at).toLocaleDateString()}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setDeleteConfirm(tree.id);
+                                    setActiveDropdown(null);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 16px',
+                                    background: 'none',
+                                    border: 'none',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    color: '#ef4444',
+                                    fontSize: '0.9rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                >
+                                  <Trash2 size={14} />
+                                  Delete Tree
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

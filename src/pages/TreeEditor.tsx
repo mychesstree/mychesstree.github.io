@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import ForceTree from '../components/ForceTree';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
-import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu, Eye, Pencil, Globe, GlobeLock, Copy, Maximize } from 'lucide-react';
+import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu, Eye, Pencil, Globe, GlobeLock, Copy, Maximize, HardDrive } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import MonthPicker from '../components/MonthPicker';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
@@ -87,6 +87,7 @@ export default function TreeEditor() {
   const [history, setHistory] = useState<Array<{ treeData: TreeNode; fen: string }>>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isPublic, setIsPublic] = useState(false);
+  const [isLocal, setIsLocal] = useState(false);
   const [showPublicUrlModal, setShowPublicUrlModal] = useState(false);
   const [publicUrlCopied, setPublicUrlCopied] = useState(false);
 
@@ -495,43 +496,48 @@ export default function TreeEditor() {
   useEffect(() => {
     if (!id) return;
 
+    // First try to load from localStorage (Local Only trees) regardless of auth status
+    const localTree = getGuestTree(id);
+    if (localTree) {
+      setTreeMeta({ ...localTree, is_local: true });
+      const root: TreeNode = localTree.tree_data ?? { fen: new Chess().fen(), children: [] };
+      setTreeData(root);
+      gameRef.current = new Chess(root.fen);
+      setCurrentFen(root.fen);
+      setViewOnly(false); 
+      setIsLocal(true);
+      setIsPublic(false);
+      setLoading(false);
+      return;
+    }
+
     if (isGuest) {
-      // Guest user - first try to load from localStorage, then try public trees
-      const tree = getGuestTree(id);
-      if (tree) {
-        setTreeMeta(tree);
-        const root: TreeNode = tree.tree_data ?? { fen: new Chess().fen(), children: [] };
-        setTreeData(root);
-        gameRef.current = new Chess(root.fen);
-        setCurrentFen(root.fen);
-        setViewOnly(false); // Guests can edit their own trees
-        setLoading(false);
-      } else {
-        // Try to load as public tree
-        (async () => {
-          try {
-            const { data, error } = await supabase.from('trees').select('*').eq('id', id).eq('is_public', true).maybeSingle();
-            if (error) {
-              console.error('Public tree loading error:', error);
-              setTreeNotFound(true);
-            } else if (data) {
-              // Load public tree as read-only
-              setTreeMeta(data);
-              const root: TreeNode = data.tree_data ?? { fen: new Chess().fen(), children: [] };
-              setTreeData(root);
-              gameRef.current = new Chess(root.fen);
-              setCurrentFen(root.fen);
-              setViewOnly(true); // Public trees are read-only for guests
-            } else {
-              setTreeNotFound(true);
-            }
-          } catch (err) {
-            console.error('Failed to load public tree:', err);
+      // Try to load as public tree
+      (async () => {
+        try {
+          const { data, error } = await supabase.from('trees').select('*').eq('id', id).eq('is_public', true).maybeSingle();
+          if (error) {
+            console.error('Public tree loading error:', error);
+            setTreeNotFound(true);
+          } else if (data) {
+            // Load public tree as read-only
+            setTreeMeta(data);
+            const root: TreeNode = data.tree_data ?? { fen: new Chess().fen(), children: [] };
+            setTreeData(root);
+            gameRef.current = new Chess(root.fen);
+            setCurrentFen(root.fen);
+            setViewOnly(true); 
+            setIsLocal(data.is_local || false);
+            setIsPublic(true);
+          } else {
             setTreeNotFound(true);
           }
-          setLoading(false);
-        })();
-      }
+        } catch (err) {
+          console.error('Failed to load public tree:', err);
+          setTreeNotFound(true);
+        }
+        setLoading(false);
+      })();
     } else if (user) {
       // Signed-in user - load from Supabase
       (async () => {
@@ -539,7 +545,6 @@ export default function TreeEditor() {
         if (error) {
           console.error('Tree loading error:', error);
           if (error.code === 'PGRST116') {
-            // Tree not found
             setTreeNotFound(true);
           } else {
             showError('Failed to load tree');
@@ -551,8 +556,9 @@ export default function TreeEditor() {
           setTreeData(root);
           gameRef.current = new Chess(root.fen);
           setCurrentFen(root.fen);
+          setIsPublic(data.is_public || false);
+          setIsLocal(data.is_local || false);
 
-          // Logic check: are we the owner?
           if (data.user_id !== user.id) {
             const { data: share } = await supabase
               .from('tree_shares')
@@ -573,10 +579,11 @@ export default function TreeEditor() {
     }
   }, [id, user, isGuest, getGuestTree]);
 
-  // Load public status from tree metadata
+  // Load public status and local mode from tree metadata
   useEffect(() => {
     if (treeMeta) {
       setIsPublic(treeMeta?.is_public || false);
+      setIsLocal(treeMeta?.is_local || false);
     }
   }, [treeMeta]);
 
@@ -601,6 +608,31 @@ export default function TreeEditor() {
         setShowPublicUrlModal(true);
         setPublicUrlCopied(false);
       }
+    }
+  };
+
+  const toggleLocal = async () => {
+    const newLocalStatus = !isLocal;
+
+    if (isGuest) {
+      // Guest trees are always local — just flip the UI state
+      setIsLocal(newLocalStatus);
+      return;
+    }
+
+    if (!id || !user) return;
+
+    const { error } = await supabase
+      .from('trees')
+      .update({
+        is_local: newLocalStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (!error) {
+      setIsLocal(newLocalStatus);
+      setTreeMeta((prev: any) => prev ? { ...prev, is_local: newLocalStatus } : null);
     }
   };
 
@@ -646,10 +678,11 @@ export default function TreeEditor() {
         const parent = findNode(cloned, prevFen);
         if (!parent) return treeData;
 
-        // Check depth limit
+        // Check depth limit (local mode bypasses cloud limits)
         const currentDepth = getNodeDepth(cloned, prevFen) || 0;
-        if (!canAddMove(currentDepth)) {
-          showError(`Depth limit reached (${isPro() ? 36 : 24} moves). Upgrade to Pro for more!`);
+        if (!canAddMove(currentDepth, isLocal)) {
+          const limit = isLocal ? 999 : (isPro() ? 99999 : 24);
+          showError(`Depth limit reached (${limit} moves)${!isLocal && !isPro() ? '. Upgrade to Pro or enable Local Mode for more.' : '.'}`);
           gameRef.current = new Chess(prevFen);
           setCurrentFen(prevFen);
           return treeData;
@@ -666,7 +699,7 @@ export default function TreeEditor() {
 
       return true;
     },
-    [treeData, addToHistory]
+    [treeData, addToHistory, canAddMove, isPro, isLocal, showError]
   );
 
   const handleNodeClick = useCallback((nodeInfo: any) => {
@@ -708,8 +741,8 @@ export default function TreeEditor() {
     setSaving(true);
     const cleaned = stripPending(treeData);
 
-    if (isGuest) {
-      // Guest user - save to localStorage
+    if (isGuest || isLocal) {
+      // Local Only tree - save to localStorage
       const tree = getGuestTree(id);
       if (tree) {
         const updatedTree = {
@@ -720,6 +753,19 @@ export default function TreeEditor() {
         saveGuestTree(updatedTree);
         setTreeData(cleaned);
         setHasPending(false);
+      } else if (isLocal && user) {
+          // If it's a local tree for a logged in user, we might need to create it in guest trees if not exists
+          const newLocalTree = {
+            id: id,
+            title: treeMeta?.title || 'Local Tree',
+            color: treeMeta?.color || 'white',
+            tree_data: cleaned,
+            created_at: treeMeta?.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          saveGuestTree(newLocalTree as any);
+          setTreeData(cleaned);
+          setHasPending(false);
       }
     } else {
       // Signed-in user - save to Supabase
@@ -730,7 +776,7 @@ export default function TreeEditor() {
       }
     }
     setSaving(false);
-  }, [id, treeData, isGuest, getGuestTree, saveGuestTree]);
+  }, [id, treeData, isGuest, isLocal, user, treeMeta, getGuestTree, saveGuestTree]);
 
   const handleImport = useCallback(() => {
     const pgn = importPgnText.trim();
@@ -1489,6 +1535,39 @@ export default function TreeEditor() {
                     </p>
                   </div>
                 )}
+                {/* Local Mode Toggle */}
+                {!viewOnly && !isGuest && (
+                  <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <HardDrive size={16} color={isLocal ? 'var(--accent-color)' : 'var(--text-muted)'} />
+                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Local Mode</span>
+                        {isLocal && (
+                          <span style={{ fontSize: '0.7rem', backgroundColor: 'rgba(245,11,11,0.15)', color: 'var(--accent-color)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>ON</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={toggleLocal}
+                        className={`btn ${isLocal ? '' : 'btn-secondary'}`}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          fontSize: '0.8rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                        }}
+                      >
+                        <HardDrive size={14} />
+                        {isLocal ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
+                    <p className="text-muted text-sm" style={{ margin: 0, lineHeight: 1.5 }}>
+                      {isLocal
+                        ? `Local mode: depth limit raised to 999 moves. Tree is still saved to your account.`
+                        : `Enable local mode to bypass the ${isPro() ? '9999' : '24'}-move depth limit for this tree.`}
+                    </p>
+                  </div>
+                )}
 
                 {/* Existing Shares List */}
                 {user?.id === treeMeta.user_id && (
@@ -2013,7 +2092,9 @@ export default function TreeEditor() {
                     {showMenu && (
                       <>
                         <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => runMobileMenuAction(() => setDeleteMode(!isDeleteMode))} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
-                        <TooltipButton tooltip="Share Repertoire" onClick={() => runMobileMenuAction(() => setShowShareModal(true))} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                        {!isLocal && (
+                          <TooltipButton tooltip="Share Repertoire" onClick={() => runMobileMenuAction(() => setShowShareModal(true))} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                        )}
                         <TooltipButton tooltip="Import" onClick={() => runMobileMenuAction(() => setShowStudySelector(true))} className="btn btn-icon btn-secondary" style={{ position: 'relative' }}><Import size={20} /></TooltipButton>
                         <TooltipButton tooltip="Toggle Fullscreen Tree" onClick={() => runMobileMenuAction(() => setTreeFullscreen(!treeFullscreen))} className="btn btn-icon btn-secondary">{treeFullscreen ? <X size={20} /> : <Maximize size={20} />}</TooltipButton>
                       </>
@@ -2028,7 +2109,9 @@ export default function TreeEditor() {
                 {!isMobile && (
                   <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                     <TooltipButton tooltip={isDeleteMode ? "Exit Delete Mode" : "Enter Delete Mode"} onClick={() => setDeleteMode(!isDeleteMode)} className={`btn btn-icon btn-secondary ${isDeleteMode ? 'btn-delete-mode-active' : ''}`}><Trash2 size={20} /></TooltipButton>
-                    <TooltipButton tooltip="Share Repertoire" onClick={() => setShowShareModal(true)} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                    {!isLocal && (
+                      <TooltipButton tooltip="Share Repertoire" onClick={() => setShowShareModal(true)} className="btn btn-icon btn-secondary"><Share2 size={20} /></TooltipButton>
+                    )}
                     <TooltipButton tooltip="Import" onClick={() => { setShowStudySelector(true); }} className="btn btn-icon btn-secondary"><Import size={20} /></TooltipButton>
                     <div style={{ width: 1, height: 24, backgroundColor: 'var(--border-color)', margin: '0 4px' }} />
                     {!viewOnly ? (

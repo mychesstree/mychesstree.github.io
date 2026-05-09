@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { MessageSquare, Send, Trash2, ChevronDown, ChevronUp, X, Eye } from 'lucide-react';
+import { MessageSquare, Send, Trash2, ChevronDown, ChevronUp, X, Eye, Download } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +35,7 @@ interface PositionPanelProps {
     treeId: string;
     fen: string;
     isPublicTree: boolean;
+    onExportLine?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,6 +76,7 @@ export default function PositionPanel({
     treeId,
     fen,
     isPublicTree,
+    onExportLine,
 }: PositionPanelProps) {
     const { user, isGuest } = useAuth();
     if (!isPublicTree) return null;
@@ -190,7 +192,35 @@ export default function PositionPanel({
                         }}>{commentCount}</span>
                     )}
                 </div>
-                {isExpanded ? <ChevronUp size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {onExportLine && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onExportLine();
+                            }}
+                            className="hover-text"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: 'var(--text-muted)',
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                padding: '0.25rem 0.5rem',
+                                borderRadius: '4px',
+                                backgroundColor: 'rgba(255,255,255,0.05)'
+                            }}
+                        >
+                            <Download size={12} />
+                            Export Variation
+                        </button>
+                    )}
+                    {isExpanded ? <ChevronUp size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />}
+                </div>
             </button>
 
             {isExpanded && (
