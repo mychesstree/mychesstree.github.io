@@ -49,7 +49,7 @@ export default function TreeEditor() {
   const [existingShares, setExistingShares] = useState<any[]>([]);
   const [loadingShares, setLoadingShares] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importTab, setImportTab] = useState<'game' | 'study' | 'archive'>('game');
+  const [importTab, setImportTab] = useState<'game' | 'study' | 'archive' | 'chesscom'>('game');
   const [importPgnText, setImportPgnText] = useState('');
   const [importedBranch] = useState<TreeNode | null>(null);
   const [studyUrl, setStudyUrl] = useState('');
@@ -69,8 +69,8 @@ export default function TreeEditor() {
   const [cachedStudies, setCachedStudies] = useState<any[]>([]);
   const [selectedStudy, setSelectedStudy] = useState<any>(null);
   const [showChaptersModal, setShowChaptersModal] = useState(false);
-  const [showChesscomModal, setShowChesscomModal] = useState(false);
   const [chesscomUsername, setChesscomUsername] = useState('');
+  const [chesscomVariant, setChesscomVariant] = useState<'chess' | 'bughouse' | 'both'>('chess');
   const [chesscomGames, setChesscomGames] = useState<any[]>([]);
   const [selectedChesscomGames, setSelectedChesscomGames] = useState<Set<string>>(new Set());
   const [isFetchingChesscomGames, setIsFetchingChesscomGames] = useState(false);
@@ -504,7 +504,7 @@ export default function TreeEditor() {
       setTreeData(root);
       gameRef.current = new Chess(root.fen);
       setCurrentFen(root.fen);
-      setViewOnly(false); 
+      setViewOnly(false);
       setIsLocal(true);
       setIsPublic(false);
       setLoading(false);
@@ -526,7 +526,7 @@ export default function TreeEditor() {
             setTreeData(root);
             gameRef.current = new Chess(root.fen);
             setCurrentFen(root.fen);
-            setViewOnly(true); 
+            setViewOnly(true);
             setIsLocal(data.is_local || false);
             setIsPublic(true);
           } else {
@@ -754,18 +754,18 @@ export default function TreeEditor() {
         setTreeData(cleaned);
         setHasPending(false);
       } else if (isLocal && user) {
-          // If it's a local tree for a logged in user, we might need to create it in guest trees if not exists
-          const newLocalTree = {
-            id: id,
-            title: treeMeta?.title || 'Local Tree',
-            color: treeMeta?.color || 'white',
-            tree_data: cleaned,
-            created_at: treeMeta?.created_at || new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          saveGuestTree(newLocalTree as any);
-          setTreeData(cleaned);
-          setHasPending(false);
+        // If it's a local tree for a logged in user, we might need to create it in guest trees if not exists
+        const newLocalTree = {
+          id: id,
+          title: treeMeta?.title || 'Local Tree',
+          color: treeMeta?.color || 'white',
+          tree_data: cleaned,
+          created_at: treeMeta?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        saveGuestTree(newLocalTree as any);
+        setTreeData(cleaned);
+        setHasPending(false);
       }
     } else {
       // Signed-in user - save to Supabase
@@ -900,15 +900,17 @@ export default function TreeEditor() {
     // Load the cached games for this entry
     setChesscomGames(entry.games);
     setSelectedChesscomGames(new Set());
-    setShowChesscomModal(true);
+    setShowImportModal(true);
+    setImportTab('chesscom');
     setChesscomUsername(entry.username);
     setSelectedMonth(entry.month);
+    setChesscomVariant(entry.variant || 'chess');
     setChesscomImportStatus({ type: 'success', msg: `Loaded ${entry.games.length} cached games for ${entry.month}.` });
   }, []);
 
   const handleRemoveChesscomEntry = useCallback((entry: any) => {
-    if (confirm(`Remove cached games for ${entry.month}?`)) {
-      chesscomCache.removeGames(entry.username, entry.month);
+    if (confirm(`Remove cached games for ${entry.month}${entry.variant && entry.variant !== 'chess' ? ` (${entry.variant})` : ''}?`)) {
+      chesscomCache.removeGames(entry.username, entry.month, entry.variant || 'chess');
       loadCachedChesscomEntries();
     }
   }, [loadCachedChesscomEntries]);
@@ -1113,24 +1115,25 @@ export default function TreeEditor() {
 
     try {
       // Check cache first
-      let cachedGames = chesscomCache.getGames(chesscomUsername, selectedMonth);
+      let cachedGames = chesscomCache.getGames(chesscomUsername, selectedMonth, chesscomVariant);
       let games;
 
       if (cachedGames) {
-        setChesscomImportStatus({ type: 'loading', msg: 'Loading from cache...' });
         games = cachedGames.games;
+        setChesscomImportStatus({ type: 'success', msg: `Loaded ${games.length} games from cache.` });
       } else {
         setChesscomImportStatus({ type: 'loading', msg: 'Fetching from Chess.com...' });
         games = await fetchChesscomGames(chesscomUsername, {
           color: 'both',
-          maxMoves: 10,
+          maxMoves: 12,
           batchSize: 50,
-          month: selectedMonth
+          month: selectedMonth,
+          variant: chesscomVariant
         });
 
         // Save to cache
         if (games.length > 0) {
-          chesscomCache.saveGames(chesscomUsername, selectedMonth, games);
+          chesscomCache.saveGames(chesscomUsername, selectedMonth, games, chesscomVariant);
           loadCachedChesscomEntries(); // Refresh cache list
         }
       }
@@ -1148,7 +1151,7 @@ export default function TreeEditor() {
     } finally {
       setIsFetchingChesscomGames(false);
     }
-  }, [chesscomUsername, selectedMonth]);
+  }, [chesscomUsername, selectedMonth, chesscomVariant]);
 
   const handleToggleChesscomGame = useCallback((gameId: string) => {
     setSelectedChesscomGames(prev => {
@@ -1174,7 +1177,7 @@ export default function TreeEditor() {
     const currentTree = tempTreeData || treeData || { fen: new Chess().fen(), children: [] };
 
     // Process games to tree structure
-    const chesscomTree = processGamesToTree(selectedGames, 10, currentTree);
+    const chesscomTree = processGamesToTree(selectedGames, 12, currentTree);
 
     if (chesscomTree.children.length === 0) {
       setChesscomImportStatus({ type: 'error', msg: `No valid moves found in ${selectedGames.length} selected game(s). The games may be incomplete or have invalid PGN format.` });
@@ -1220,7 +1223,7 @@ export default function TreeEditor() {
 
     // Close modal after successful import
     setTimeout(() => {
-      setShowChesscomModal(false);
+      setShowImportModal(false);
       setSelectedChesscomGames(new Set());
       setChesscomGames([]);
       setChesscomUsername('');
@@ -1537,7 +1540,7 @@ export default function TreeEditor() {
                 )}
                 {/* Local Mode Toggle */}
                 {!viewOnly && !isGuest && (
-                  <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <HardDrive size={16} color={isLocal ? 'var(--accent-color)' : 'var(--text-muted)'} />
@@ -1563,8 +1566,8 @@ export default function TreeEditor() {
                     </div>
                     <p className="text-muted text-sm" style={{ margin: 0, lineHeight: 1.5 }}>
                       {isLocal
-                        ? `Local mode: depth limit raised to 999 moves. Tree is still saved to your account.`
-                        : `Enable local mode to bypass the ${isPro() ? '9999' : '24'}-move depth limit for this tree.`}
+                        ? `Local mode: tree saved locally and less restrictions.`
+                        : `Enable local mode to bypass the ${isPro() ? '36' : '24'}-move depth limit for this tree.`}
                     </p>
                   </div>
                 )}
@@ -1749,7 +1752,7 @@ export default function TreeEditor() {
                 </button>
                 <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Import size={24} color="var(--accent-color)" />
-                  Import from Lichess
+                  Import Games
                 </h2>
 
                 {/* Tab Navigation */}
@@ -1787,7 +1790,17 @@ export default function TreeEditor() {
                       borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
                     }}
                   >
-                    Import Archive
+                    Lichess Archive
+                  </button>
+                  <button
+                    onClick={() => setImportTab('chesscom')}
+                    className={`btn ${importTab === 'chesscom' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{
+                      borderBottom: importTab === 'chesscom' ? '2px solid var(--accent-color)' : 'none',
+                      borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
+                    }}
+                  >
+                    Chess.com
                   </button>
                 </div>
 
@@ -1894,6 +1907,153 @@ export default function TreeEditor() {
                         {studyImportStatus.type === 'loading' ? 'Importing...' : 'Import Study'}
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Chess.com Import Tab */}
+                {importTab === 'chesscom' && (
+                  <div>
+                    <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
+                      Import games from your Chess.com account by month and variant. Limited to 12 moves each.
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                      <div className="input-group" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                        <label>Username</label>
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="Chess.com username"
+                          value={chesscomUsername}
+                          onChange={(e) => setChesscomUsername(e.target.value)}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      
+                      <div className="input-group" style={{ flex: '0 0 auto', marginBottom: 0 }}>
+                        <label>Month</label>
+                        <MonthPicker
+                          value={selectedMonth}
+                          onChange={setSelectedMonth}
+                          placeholder="Month"
+                          disabled={isFetchingChesscomGames}
+                        />
+                      </div>
+
+                      <div className="input-group" style={{ flex: '0 0 auto', marginBottom: 0 }}>
+                        <label>Variant</label>
+                        <select
+                          className="input"
+                          value={chesscomVariant}
+                          onChange={(e) => setChesscomVariant(e.target.value as any)}
+                          style={{ width: '130px' }}
+                          disabled={isFetchingChesscomGames}
+                        >
+                          <option value="chess">Regular</option>
+                          <option value="bughouse">Bughouse</option>
+                          <option value="both">All</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {chesscomImportStatus.msg && (
+                      <div style={{
+                        padding: '0.75rem',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: '0.85rem',
+                        marginBottom: '1rem',
+                        backgroundColor: chesscomImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                          chesscomImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.1)' :
+                            'rgba(59, 130, 246, 0.1)',
+                        color: chesscomImportStatus.type === 'error' ? '#ef4444' :
+                          chesscomImportStatus.type === 'success' ? '#22c55e' :
+                            '#3b82f6',
+                        border: `1px solid ${chesscomImportStatus.type === 'error' ? 'rgba(239, 68, 68, 0.2)' :
+                          chesscomImportStatus.type === 'success' ? 'rgba(34, 197, 94, 0.2)' :
+                            'rgba(59, 130, 246, 0.2)'}`
+                      }}>
+                        {chesscomImportStatus.msg}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleFetchChesscomGames}
+                      disabled={isFetchingChesscomGames || !chesscomUsername.trim()}
+                      className="btn btn-primary"
+                      style={{ width: '100%', marginBottom: '1rem' }}
+                    >
+                      {isFetchingChesscomGames ? 'Fetching...' : 'Fetch Games'}
+                    </button>
+
+                    {chesscomGames.length > 0 && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <h4 style={{ fontSize: '0.9rem', margin: 0 }}>Select Games ({selectedChesscomGames.size}):</h4>
+                          <button
+                            onClick={() => {
+                              if (selectedChesscomGames.size === chesscomGames.length) {
+                                setSelectedChesscomGames(new Set());
+                              } else {
+                                setSelectedChesscomGames(new Set(chesscomGames.map(g => g.id)));
+                              }
+                            }}
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                          >
+                            {selectedChesscomGames.size === chesscomGames.length ? 'Deselect All' : 'Select All'}
+                          </button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto', marginBottom: '1rem' }}>
+                          {chesscomGames.map((game) => (
+                            <div
+                              key={game.id}
+                              onClick={() => handleToggleChesscomGame(game.id)}
+                              style={{
+                                padding: '0.75rem',
+                                border: `1px solid ${selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--border-color)'}`,
+                                borderRadius: 'var(--radius-md)',
+                                cursor: 'pointer',
+                                backgroundColor: selectedChesscomGames.has(game.id) ? 'rgba(236, 72, 153, 0.05)' : 'rgba(255,255,255,0.02)',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                                  {game.white.username} vs {game.black.username}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                  {game.date} • {(game.rules || 'chess').toUpperCase()} • {game.result}
+                                </div>
+                              </div>
+                              <div style={{
+                                width: '18px',
+                                height: '18px',
+                                border: `2px solid ${selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--border-color)'}`,
+                                borderRadius: '4px',
+                                backgroundColor: selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'transparent',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                {selectedChesscomGames.has(game.id) && <span style={{ color: 'white', fontSize: '10px' }}>✓</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={handleImportSelectedChesscomGames}
+                          disabled={selectedChesscomGames.size === 0}
+                          className="btn btn-primary"
+                          style={{ width: '100%' }}
+                        >
+                          Import {selectedChesscomGames.size} Games
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2377,10 +2537,9 @@ export default function TreeEditor() {
                       <button
                         onClick={() => {
                           setShowStudySelector(false);
-                          setShowChesscomModal(true);
-                          // Reset state when opening fresh modal but keep current month
+                          setShowImportModal(true);
+                          setImportTab('chesscom');
                           setChesscomUsername('');
-                          // Don't reset selectedMonth - keep current month default
                           setChesscomGames([]);
                           setSelectedChesscomGames(new Set());
                           setChesscomImportStatus({ type: '', msg: '' });
@@ -2499,9 +2658,28 @@ export default function TreeEditor() {
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                               <div>
-                                <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
-                                  {entry.username} - {new Date(entry.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem' }}>
+                                  {entry.username}
                                 </h4>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    {new Date(entry.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                  </span>
+                                  {entry.variant && entry.variant !== 'chess' && (
+                                    <span style={{ 
+                                      fontSize: '0.7rem', 
+                                      color: 'var(--accent-color)', 
+                                      backgroundColor: 'rgba(236, 72, 153, 0.1)', 
+                                      padding: '0.1rem 0.4rem', 
+                                      borderRadius: '4px',
+                                      fontWeight: 600,
+                                      border: '1px solid rgba(236, 72, 153, 0.2)',
+                                      textTransform: 'uppercase'
+                                    }}>
+                                      {entry.variant}
+                                    </span>
+                                  )}
+                                </div>
                                 <p style={{ margin: '0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                   {entry.games.length} games
                                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>• Chess.com</span>
@@ -2699,235 +2877,6 @@ export default function TreeEditor() {
             </div>
           )}
 
-          {/* Chess.com Import Modal */}
-          {showChesscomModal && (
-            <div style={{
-              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-              backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex',
-              alignItems: 'center', justifyContent: 'center', padding: isMobile ? '0.5rem' : '1rem'
-            }}>
-              <div className="card animate-fade-in" style={{
-                maxWidth: 700,
-                width: '100%',
-                position: 'relative',
-                maxHeight: isMobile ? '90vh' : '80vh',
-                overflowY: 'auto',
-                margin: isMobile ? '0' : undefined
-              }}>
-                <button onClick={() => setShowChesscomModal(false)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-                  <X size={24} />
-                </button>
-                <h2 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Import size={20} />
-                  Import from Chess.com
-                </h2>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {/* Username and Month Row */}
-                  <div className="input-group">
-                    <label>Chess.com Username</label>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
-                      <input
-                        type="text"
-                        className="input"
-                        placeholder="Enter Chess.com username"
-                        value={chesscomUsername}
-                        onChange={(e) => setChesscomUsername(e.target.value)}
-                        style={{ flex: 1 }}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            handleFetchChesscomGames();
-                          }
-                        }}
-                      />
-
-                      {/* Month Selector on the right */}
-                      <MonthPicker
-                        value={selectedMonth}
-                        onChange={setSelectedMonth}
-                        placeholder="Choose a month..."
-                        disabled={isFetchingChesscomGames}
-                      />
-                    </div>
-
-                    {/* Selected month/year display - always show when month is selected */}
-                    {selectedMonth && (
-                      <div style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--text-muted)',
-                        marginTop: '0.25rem',
-                        fontStyle: 'italic'
-                      }}>
-                        Importing from: {(() => {
-                          const [year, month] = selectedMonth.split('-');
-                          const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-                          return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-                        })()}
-                      </div>
-                    )}
-
-                    {/* Fetch/Import Button below everything */}
-                    <div style={{ marginTop: '0.75rem' }}>
-                      <button
-                        onClick={handleFetchChesscomGames}
-                        disabled={isFetchingChesscomGames || !chesscomUsername.trim() || !selectedMonth}
-                        className="btn btn-primary"
-                        style={{ width: '100%' }}
-                      >
-                        {isFetchingChesscomGames ? '...' : 'Fetch'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Status Message */}
-                  {chesscomImportStatus.msg && (
-                    <div style={{
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: chesscomImportStatus.type === 'error' ? 'var(--error-bg)' :
-                        chesscomImportStatus.type === 'success' ? 'var(--success-bg)' :
-                          'var(--info-bg)',
-                      color: chesscomImportStatus.type === 'error' ? 'var(--error-text)' :
-                        chesscomImportStatus.type === 'success' ? 'var(--success-text)' :
-                          'var(--info-text)',
-                      fontSize: '0.9rem',
-                    }}>
-                      {chesscomImportStatus.msg}
-                    </div>
-                  )}
-
-                  {/* Games List */}
-                  {chesscomGames.length > 0 && (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                        <div>
-                          <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', margin: 0 }}>
-                            Games
-                          </h3>
-                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            ({selectedChesscomGames.size} selected)
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const treeColor = treeMeta?.color || 'white';
-                            if (selectedChesscomGames.size === 0) {
-                              // Auto-select games where user played as the tree color
-                              const matchingGames = chesscomGames.filter(game => game.color === treeColor);
-                              setSelectedChesscomGames(new Set(matchingGames.map(g => g.id)));
-                            } else {
-                              setSelectedChesscomGames(new Set());
-                            }
-                          }}
-                          className="btn btn-secondary"
-                          style={{
-                            fontSize: '0.8rem',
-                            padding: '0.5rem',
-                            minWidth: '36px',
-                            height: '36px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                          title={selectedChesscomGames.size === 0 ? `Select games played as ${treeMeta?.color || 'white'}` : 'Clear selection'}
-                        >
-                          {selectedChesscomGames.size === 0 ? (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            </svg>
-                          ) : (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2">
-                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                              <polyline points="9 11 12 14 20 6"></polyline>
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto' }}>
-                        {chesscomGames.map((game) => (
-                          <div
-                            key={game.id}
-                            onClick={() => handleToggleChesscomGame(game.id)}
-                            style={{
-                              padding: '1rem',
-                              border: `1px solid ${selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--border-color)'}`,
-                              borderRadius: 'var(--radius-md)',
-                              cursor: 'pointer',
-                              backgroundColor: selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'var(--panel-bg)',
-                              transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!selectedChesscomGames.has(game.id)) {
-                                e.currentTarget.style.backgroundColor = 'var(--hover-bg)';
-                                e.currentTarget.style.transform = 'translateY(-1px)';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!selectedChesscomGames.has(game.id)) {
-                                e.currentTarget.style.backgroundColor = 'var(--panel-bg)';
-                                e.currentTarget.style.transform = 'translateY(0)';
-                              }
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                                  <span style={{ fontWeight: 'bold' }}>
-                                    {game.white.username} ({game.white.rating}) vs {game.black.username} ({game.black.rating})
-                                  </span>
-                                  <span style={{
-                                    fontSize: '0.8rem',
-                                    color: 'var(--text-muted)',
-                                    padding: '0.125rem 0.5rem',
-                                    backgroundColor: 'var(--border-color)',
-                                    borderRadius: 'var(--radius-sm)'
-                                  }}>
-                                    {game.result}
-                                  </span>
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                  {game.color === 'white' ? 'Played as White' : 'Played as Black'}
-                                  {game.date && ` • ${new Date(game.date).toLocaleDateString()}`}
-                                </div>
-                              </div>
-                              <div style={{
-                                width: '20px',
-                                height: '20px',
-                                border: `2px solid ${selectedChesscomGames.has(game.id) ? 'white' : 'var(--accent-color)'}`,
-                                borderRadius: '4px',
-                                backgroundColor: selectedChesscomGames.has(game.id) ? 'var(--accent-color)' : 'transparent',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}>
-                                {selectedChesscomGames.has(game.id) && (
-                                  <span style={{ color: 'white', fontSize: '12px' }}>✓</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Import button below Games section */}
-                      <div style={{ marginTop: '1rem' }}>
-                        {chesscomGames.length > 0 && (
-                          <button
-                            onClick={handleImportSelectedChesscomGames}
-                            disabled={selectedChesscomGames.size === 0 || isFetchingChesscomGames}
-                            className="btn btn-primary"
-                            style={{ width: '100%' }}
-                          >
-                            {isFetchingChesscomGames ? 'Importing...' : `Import ${selectedChesscomGames.size} Selected Game${selectedChesscomGames.size !== 1 ? 's' : ''}`}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Temporary Changes Notification */}
           {hasUnsavedChanges && (
