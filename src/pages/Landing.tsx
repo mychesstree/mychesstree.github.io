@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom'
-import { 
+import {
   ChevronRight,
-  CheckCircle
+  CheckCircle,
+  GitBranch
 } from 'lucide-react'
-import ReviewHeatmap from '../components/ReviewHeatmap'
+import SEO from '../components/SEO'
+import LandingForceTree from '../components/LandingForceTree'
+import LandingReviewHeatmap from '../components/LandingReviewHeatmap'
 
 
 export default function Landing() {
@@ -11,8 +14,29 @@ export default function Landing() {
 
   return (
     <div className="landing-page">
+      <SEO
+        title="chesstr.ee | Chess Opening Repertoire Trainer"
+        description="Build, visualize, and memorize your chess opening repertoire with interactive opening trees, PGN import, and spaced repetition review."
+        path="/"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'SoftwareApplication',
+          name: 'chesstr.ee',
+          applicationCategory: 'EducationalApplication',
+          operatingSystem: 'Web',
+          url: 'https://chesstr.ee/',
+          description: 'A chess opening repertoire trainer for building visual opening trees, importing PGNs, and reviewing lines with spaced repetition.',
+          image: 'https://chesstr.ee/demo.png',
+          offers: {
+            '@type': 'Offer',
+            price: '0',
+            priceCurrency: 'USD',
+          },
+        }}
+      />
       {/* Hero Section */}
       <section className="hero">
+        <LandingForceTree />
         <div className="hero-content">
           <h1 className="hero-title">
             Master Your Openings with
@@ -21,7 +45,7 @@ export default function Landing() {
             </span>
           </h1>
           <p className="hero-subtitle">
-            Build, organize, and perfect your chess opening repertoire with intelligent tree visualization 
+            Build, organize, and perfect your chess opening repertoire with intelligent tree visualization
             and spaced repetition learning.
           </p>
           <div className="hero-actions">
@@ -29,48 +53,23 @@ export default function Landing() {
               Get Started Free
               <ChevronRight size={20} />
             </Link>
-            <Link to="/demo" className="btn btn-secondary btn-large">
-              View Demo
+            <Link to="/editor/839fc96f-edfd-477b-b114-390e1a6f52e2" className="btn btn-secondary btn-large">
+              Explore Tree
+              <GitBranch size={20} />
             </Link>
-          </div>
-        </div>
-        <div className="hero-visual">
-          <div className="demo-image-container-large">
-            <img src="/demo.png" alt="chesstr.ee Demo" className="demo-image-large" />
           </div>
         </div>
       </section>
 
 
       {/* Activity Preview */}
-      <section className="activity-preview">
-        <div className="container">
-          <h2 className="section-title">Track Your Progress</h2>
-          <div className="activity-content">
-            <div className="activity-description">
-              <h3>Spaced Repetition System</h3>
-              <p>Our intelligent scheduling ensures you review positions at the optimal time for memory retention. Track your daily practice habits and watch your opening knowledge grow.</p>
-              <div className="activity-features">
-                <div className="activity-feature">
-                  <CheckCircle size={20} />
-                  <span>Smart scheduling based on forgetting curves</span>
-                </div>
-                <div className="activity-feature">
-                  <CheckCircle size={20} />
-                  <span>Visual progress tracking</span>
-                </div>
-                <div className="activity-feature">
-                  <CheckCircle size={20} />
-                  <span>Daily review reminders</span>
-                </div>
-              </div>
-            </div>
-            <div className="heatmap-demo">
-              <h4>Sample Activity Calendar</h4>
-              <ReviewHeatmap />
-              <p className="heatmap-caption">Color intensity shows review frequency - pink for past, gray for scheduled</p>
-            </div>
-          </div>
+      <section className="activity-preview" style={{ position: 'relative' }}>
+        <LandingReviewHeatmap />   {/* sits in the background */}
+        <div className="container" style={{ position: 'relative', zIndex: 1, height: '500px'}}>
+          <h2 className="hero-title" >
+            Spaced Repetition
+          </h2>
+          Remember your lines and play with confidence
         </div>
       </section>
 

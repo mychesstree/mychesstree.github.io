@@ -30,6 +30,18 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+const HomeRoute = () => {
+  const { user, isGuest, loading } = useAuth();
+
+  return (
+    <>
+      <LoadingScreen isLoading={loading} />
+      {!loading && (user || isGuest) ? <Navigate to="/dashboard" replace /> : null}
+      {!loading && !user && !isGuest ? <Landing /> : null}
+    </>
+  );
+};
+
 // Global offline indicator component
 function GlobalOfflineIndicator() {
   const isOnline = useOnlineStatus();
@@ -79,15 +91,16 @@ function App() {
           <GlobalOfflineIndicator />
           <HashRouter>
             <Routes>
+              <Route path="/" element={<HomeRoute />} />
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/pricing" element={<Pricing />} />
               <Route path="/reset-password" element={<UpdatePassword />} />
-              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route index element={<Dashboard />} />
+              <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="editor/:id" element={<TreeEditor />} />
                 <Route path="review/:id" element={<Review />} />
                 <Route path="settings" element={<Settings />} />
-                <Route path="pricing" element={<Pricing />} />
               </Route>
               <Route path="*" element={<TreeNotFound />} />
             </Routes>

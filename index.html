@@ -4,8 +4,59 @@
     <meta charset="UTF-8" />
     <script src="./coi-serviceworker.js"></script>
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="canonical" href="https://chesstr.ee/" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>chesstr.ee</title>
+    <meta
+      name="description"
+      content="chesstr.ee is a chess opening repertoire trainer for building visual opening trees, importing PGNs, reviewing lines with spaced repetition, and tracking chess study progress."
+    />
+    <meta
+      name="keywords"
+      content="chess opening trainer, chess repertoire, opening repertoire, chess study, spaced repetition chess, PGN import, chess opening tree"
+    />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#f50b0b" />
+    <meta name="application-name" content="chesstr.ee" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="chesstr.ee" />
+    <meta property="og:title" content="chesstr.ee | Chess Opening Repertoire Trainer" />
+    <meta
+      property="og:description"
+      content="Build, visualize, and memorize your chess opening repertoire with interactive trees, PGN import, and spaced repetition review."
+    />
+    <meta property="og:url" content="https://chesstr.ee/" />
+    <meta property="og:image" content="https://chesstr.ee/demo.png" />
+    <meta property="og:image:alt" content="chesstr.ee chess opening tree trainer interface" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="chesstr.ee | Chess Opening Repertoire Trainer" />
+    <meta
+      name="twitter:description"
+      content="Build visual chess opening trees and review your repertoire with spaced repetition."
+    />
+    <meta name="twitter:image" content="https://chesstr.ee/demo.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "chesstr.ee",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Web",
+        "url": "https://chesstr.ee/",
+        "description": "A chess opening repertoire trainer for building visual opening trees, importing PGNs, and reviewing lines with spaced repetition.",
+        "image": "https://chesstr.ee/demo.png",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+    <title>chesstr.ee | Chess Opening Repertoire Trainer</title>
   </head>
   <body>
     <div id="root"></div>

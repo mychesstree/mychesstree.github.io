@@ -2235,7 +2235,7 @@ export default function TreeEditor() {
               zIndex: isMobile ? 10 : undefined
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <button onClick={() => navigate('/')} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
+                <button onClick={() => navigate('/dashboard')} className="btn btn-secondary btn-icon"><ArrowLeft size={18} /></button>
                 <div style={{ flex: isMobile && showMenu ? 0 : undefined, overflow: 'hidden', transition: 'flex 0.3s ease' }}>
                   {(!isMobile || !showMenu) && <h2 style={{ margin: 0, fontSize: '1.2rem', borderBottom: treeMeta.color === 'white' ? '5px solid #fff' : '5px solid #444444ff', display: 'inline-block', lineHeight: '1.3' }}>{treeMeta.title}</h2>}
                 </div>
@@ -2918,4 +2918,3 @@ export default function TreeEditor() {
     </div>
   );
 }
-

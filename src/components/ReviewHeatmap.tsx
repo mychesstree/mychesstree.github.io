@@ -3,9 +3,6 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 // @ts-ignore
 import CalendarHeatmap from 'react-calendar-heatmap';
-
-// Base styles for the library (usually imported from the node_module)
-// But we'll rely on index.css for theme consistency
 import 'react-calendar-heatmap/dist/styles.css';
 
 interface HeatmapData {
@@ -18,24 +15,19 @@ export default function ReviewHeatmap() {
 
   const fetchStats = async () => {
     if (isGuest) {
-      // For guest users, use localStorage data
       try {
-        const guestReviews = loadGuestReviews(); // Load all guest reviews (no treeId = all)
+        const guestReviews = loadGuestReviews();
         const heatmapData: HeatmapData = {};
-
         guestReviews.forEach(review => {
-          // Count reviews by next_review_date
-          const reviewDate = review.next_review_date.split('T')[0]; // Get date part only
+          const reviewDate = review.next_review_date.split('T')[0];
           heatmapData[reviewDate] = (heatmapData[reviewDate] || 0) + 1;
         });
-
         setData(heatmapData);
       } catch (e) {
         console.error('Guest heatmap fetch error:', e);
       }
       return;
     }
-
     if (!user) return;
     try {
       const { data: stats, error } = await supabase.rpc('get_review_stats', { u_id: user.id });
@@ -64,31 +56,74 @@ export default function ReviewHeatmap() {
   const endDate = new Date(currentYear, 11, 31);
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // Stats derived from data
+  const dueToday = data[todayStr] ?? 0;
+
+  const totalReviewed = useMemo(() => {
+    return Object.entries(data)
+      .filter(([date]) => date <= todayStr)
+      .reduce((sum, [, count]) => sum + count, 0);
+  }, [data, todayStr]);
+
+  const streak = useMemo(() => {
+    let count = 0;
+    const cursor = new Date();
+    // If nothing logged today, start checking from yesterday
+    if (!data[todayStr]) cursor.setDate(cursor.getDate() - 1);
+    while (true) {
+      const d = cursor.toISOString().split('T')[0];
+      if (data[d] > 0) {
+        count++;
+        cursor.setDate(cursor.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return count;
+  }, [data, todayStr]);
+
   return (
-    <div className="heatmap-scroll-wrapper" style={{ marginTop: '1rem', marginBottom: '1rem', padding: '1rem' }}>
-      <div>
-        <CalendarHeatmap
-          startDate={startDate}
-          endDate={endDate}
-          values={heatmapValues}
-          showWeekdayLabels={false}
-          showMonthLabels={false}
-          classForValue={(value: any) => {
-            if (!value || value.count === 0) {
-              return value?.date === todayStr ? 'color-empty color-today' : 'color-empty';
-            }
+    <div>
 
-            const isFuture = value.date > todayStr;
-            const level = Math.min(Math.ceil(value.count / 3), 4); // Scale 1-4
+      <div className="heatmap-scroll-wrapper" style={{ marginTop: '0.5rem', marginBottom: '0.5rem'}}>
+        <div>
+          <CalendarHeatmap
+            startDate={startDate}
+            endDate={endDate}
+            values={heatmapValues}
+            showWeekdayLabels={false}
+            showMonthLabels={false}
+            classForValue={(value: any) => {
+              if (!value || value.count === 0) {
+                return value?.date === todayStr ? 'color-empty color-today' : 'color-empty';
+              }
+              const isFuture = value.date > todayStr;
+              const level = Math.min(Math.ceil(value.count / 3), 4);
+              const baseClass = isFuture ? `color-gray-${level}` : `color-pink-${level}`;
+              return value.date === todayStr ? `${baseClass} color-today` : baseClass;
+            }}
+            titleForValue={(value: any) => {
+              if (!value) return 'No reviews';
+              return `${value.date}: ${value.count} cards`;
+            }}
+          />
+        </div>
 
-            const baseClass = isFuture ? `color-gray-${level}` : `color-pink-${level}`;
-            return value.date === todayStr ? `${baseClass} color-today` : baseClass;
-          }}
-          titleForValue={(value: any) => {
-            if (!value) return 'No reviews';
-            return `${value.date}: ${value.count} cards`;
-          }}
-        />
+
+      </div>
+      <div className="hm-stats">
+        <div className="hm-stat">
+          <span className="hm-stat-val">{streak}</span>
+          <span className="hm-stat-lbl">day streak</span>
+        </div>
+        <div className="hm-stat">
+          <span className="hm-stat-val">{totalReviewed.toLocaleString()}</span>
+          <span className="hm-stat-lbl">cards reviewed</span>
+        </div>
+        <div className="hm-stat">
+          <span className="hm-stat-val">{dueToday}</span>
+          <span className="hm-stat-lbl">Scheduled</span>
+        </div>
       </div>
     </div>
   );

@@ -135,8 +135,11 @@ function parseMoveText(moveText: string, fen?: string): PgnMove[] {
         }
 
         // Check for annotations (NAGs)
-        if (i + 1 < tokens.length && tokens[i + 1].match(/^[?!+]+$/)) {
-          move.annotations = [tokens[i + 1]];
+        if (i + 1 < tokens.length && tokens[i + 1].startsWith('{') && tokens[i + 1].endsWith('}')) {
+          const raw = tokens[i + 1].slice(1, -1).trim();
+          const { cleanComment, shapes } = extractShapesFromComment(raw);
+          if (cleanComment) move.comment = cleanComment;
+          if (shapes && shapes.length > 0) move.shapes = shapes;
           i++;
         }
 
@@ -150,6 +153,69 @@ function parseMoveText(moveText: string, fen?: string): PgnMove[] {
   }
 
   return moves;
+}
+
+// Add this helper
+function extractShapesFromComment(comment: string): {
+  cleanComment: string;
+  shapes: PgnMove['shapes'];
+} {
+  const shapes: NonNullable<PgnMove['shapes']> = [];
+
+  // Extract [%cal ...] arrow annotations
+  const calRegex = /\[%cal\s+([^\]]+)\]/g;
+  let match;
+  while ((match = calRegex.exec(comment)) !== null) {
+    const entries = match[1].split(',');
+    for (const entry of entries) {
+      const trimmed = entry.trim();
+      // Format: Gd7d5 or Rd7d5 — first char is color code
+      if (trimmed.length >= 5) {
+        const colorCode = trimmed[0];
+        const from = trimmed.slice(1, 3);
+        const to = trimmed.slice(3, 5);
+        const colorMap: Record<string, string> = {
+          G: 'green', R: 'red', B: 'blue', Y: 'yellow'
+        };
+        shapes.push({
+          from,
+          to,
+          color: colorMap[colorCode] ?? 'green',
+          brush: 'arrow',
+        });
+      }
+    }
+  }
+
+  // Extract [%csl ...] square highlight annotations
+  const cslRegex = /\[%csl\s+([^\]]+)\]/g;
+  while ((match = cslRegex.exec(comment)) !== null) {
+    const entries = match[1].split(',');
+    for (const entry of entries) {
+      const trimmed = entry.trim();
+      if (trimmed.length >= 3) {
+        const colorCode = trimmed[0];
+        const square = trimmed.slice(1, 3);
+        const colorMap: Record<string, string> = {
+          G: 'green', R: 'red', B: 'blue', Y: 'yellow'
+        };
+        shapes.push({
+          from: square,
+          to: square,               // same square = highlight, not arrow
+          color: colorMap[colorCode] ?? 'green',
+          brush: 'highlight',
+        });
+      }
+    }
+  }
+
+  // Strip all [%...] annotations from the visible comment text
+  const cleanComment = comment
+    .replace(/\[%cal\s+[^\]]+\]/g, '')
+    .replace(/\[%csl\s+[^\]]+\]/g, '')
+    .trim();
+
+  return { cleanComment, shapes };
 }
 
 function tokenizeMoveText(moveText: string): string[] {
@@ -374,7 +440,6 @@ export interface ArchivedGame {
   date?: string;
   result?: string;
   rules?: string; // Chess variant rules
-  color?: 'white' | 'black' | 'both';
   color?: 'white' | 'black' | 'both'; // User's color in the game
 }
 

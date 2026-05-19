@@ -825,23 +825,49 @@ rect {
 /* Landing Page Styles */
 .landing-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--bg-color) 0%, #2a1a1f 100%);
+  background:
+    radial-gradient(circle at 78% 18%, rgba(244, 63, 94, 0.18), transparent 34rem),
+    linear-gradient(135deg, #150b0f 0%, #231017 52%, #0f0b0d 100%);
+  overflow: hidden;
 }
 
 /* Hero Section */
 .hero {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(360px, 1.14fr);
   align-items: center;
-  min-height: 90vh;
-  padding: 0 2rem;
-  gap: 4rem;
-  max-width: 1400px;
+  min-height: 92vh;
+  padding: 5rem 2rem 4rem;
+  max-width: 1500px;
   margin: 0 auto;
+  isolation: isolate;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -8vw;
+  width: min(760px, 72vw);
+  background: linear-gradient(90deg, rgba(21, 11, 15, 0.96) 0%, rgba(21, 11, 15, 0.86) 55%, rgba(21, 11, 15, 0) 100%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 2rem 2rem 2rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(253, 164, 175, 0.32), transparent);
+  z-index: -1;
 }
 
 .hero-content {
-  flex: 1;
-  max-width: 600px;
+  position: relative;
+  z-index: 2;
+  max-width: 640px;
+  padding: 1rem 0;
 }
 
 .hero-title {
@@ -860,9 +886,10 @@ rect {
 
 .hero-subtitle {
   font-size: 1.25rem;
-  color: var(--text-muted);
+  color: #fecdd3;
   margin-bottom: 2rem;
   line-height: 1.6;
+  max-width: 560px;
 }
 
 .hero-actions {
@@ -899,48 +926,120 @@ rect {
   margin-top: 0.5rem;
 }
 
-.hero-visual {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.chess-tree-preview {
-  position: relative;
-  width: 500px;
-  height: 400px;
-}
-
-.tree-demo-container {
-  position: relative;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 1rem;
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-}
-
-.tree-demo-overlay {
+.landing-force-tree {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(transparent, rgba(26, 15, 18, 0.95));
-  padding: 2rem 1.5rem 1.5rem;
-  color: white;
-  text-align: center;
+  inset: 0 -4vw 0 30%;
+  z-index: 0;
+  opacity: 0.92;
+  pointer-events: none;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent 0%, black 18%, black 86%, transparent 100%);
 }
 
-.tree-demo-overlay h3 {
-  margin-bottom: 0.5rem;
-  font-size: 1.1rem;
+.landing-force-tree::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(21, 11, 15, 0.88) 0%, rgba(21, 11, 15, 0.18) 28%, rgba(21, 11, 15, 0.34) 100%),
+    radial-gradient(circle at 68% 42%, rgba(225, 29, 72, 0.2), transparent 30rem);
+  z-index: 2;
 }
 
-.tree-demo-overlay p {
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
-  opacity: 0.9;
+.landing-force-tree-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.landing-tree-link {
+  stroke: rgba(253, 164, 175, 0.34);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.landing-tree-link.is-mainline {
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 3;
+  filter: url("#landing-tree-glow");
+}
+
+.landing-tree-node {
+  animation: landing-node-float 4.8s ease-in-out infinite;
+}
+
+.landing-tree-node circle {
+  fill: #14090d;
+  stroke: rgba(253, 164, 175, 0.76);
+  stroke-width: 1.8;
+}
+
+.landing-tree-node.is-mainline circle {
+  fill: var(--accent-color);
+  stroke: #fff;
+  stroke-width: 2.4;
+  filter: url("#landing-tree-glow");
+}
+
+.landing-tree-node text {
+  fill: rgba(255, 241, 242, 0.88);
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(21, 11, 15, 0.9);
+  stroke-width: 4px;
+  pointer-events: none;
+}
+
+.landing-tree-badge {
+  position: absolute;
+  right: clamp(1rem, 5vw, 5rem);
+  bottom: clamp(3rem, 8vw, 6rem);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(560px, 52vw);
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(253, 164, 175, 0.28);
+  border-radius: 8px;
+  background: rgba(15, 8, 11, 0.68);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px);
+}
+
+.landing-tree-badge span,
+.landing-tree-badge strong {
+  color: #fff1f2;
+  font-size: 0.78rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.landing-tree-badge span {
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fecdd3;
+}
+
+.landing-tree-badge strong {
+  padding: 0.42rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(225, 29, 72, 0.22);
+  font-weight: 700;
+}
+
+@keyframes landing-node-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
 }
 
 /* Features Section */
@@ -1210,18 +1309,24 @@ rect {
 /* Responsive Design */
 @media (max-width: 768px) {
   .hero {
-    flex-direction: column;
-    text-align: center;
+    grid-template-columns: 1fr;
+    text-align: left;
     gap: 2rem;
-    padding: 2rem 1rem;
+    min-height: 86vh;
+    padding: 6rem 1rem 3rem;
+  }
+
+  .hero::before {
+    width: 120vw;
+    background: linear-gradient(90deg, rgba(21, 11, 15, 0.97), rgba(21, 11, 15, 0.8));
   }
 
   .hero-title {
-    font-size: 2.5rem;
+    font-size: 2.75rem;
   }
 
   .brand-name {
-    font-size: 3rem;
+    font-size: 3.1rem;
   }
 
   .hero-subtitle {
@@ -1229,7 +1334,7 @@ rect {
   }
 
   .hero-actions {
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   .hero-stats {
@@ -1237,9 +1342,14 @@ rect {
     gap: 2rem;
   }
 
-  .chess-tree-preview {
-    width: 350px;
-    height: 350px;
+  .landing-force-tree {
+    inset: 28% -78vw 0 1rem;
+    opacity: 0.5;
+    mask-image: linear-gradient(180deg, black 0%, black 78%, transparent 100%);
+  }
+
+  .landing-tree-badge {
+    display: none;
   }
 
   .activity-content {
@@ -1737,3 +1847,151 @@ rect {
     gap: 0.5rem;
   }
 }
+
+
+/* ── LandingReviewHeatmap ──────────────────────────────────────────────────── */
+
+/*
+  The outer wrapper overlays behind your section content like LandingForceTree.
+  Swap absolute → relative and remove pointer-events: none if you want it
+  to be interactive / non-overlapping.
+*/
+.landing-heatmap-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.18;          /* ghostly background layer — raise to ~0.35 if used standalone */
+}
+
+.landing-heatmap-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transform: scale(1.6);  /* blow it up so cells feel chunky in the bg */
+  transform-origin: center;
+}
+
+/* ── If you want the heatmap as a real foreground section element, use these
+   instead and swap .landing-heatmap-bg to position: relative; opacity: 1 ── */
+.heatmap-demo .landing-heatmap-bg {
+  position: relative;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Month label row */
+.hm-month-labels {
+  display: flex;
+  gap: 3px;
+}
+
+.hm-month-cell {
+  width: 12px;
+  min-width: 12px;
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: visible;
+  line-height: 1;
+}
+
+/* Grid */
+.hm-grid {
+  display: flex;
+  gap: 3px;
+}
+
+.hm-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Cells */
+.hm-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.hm-spacer {
+  background: transparent;
+}
+
+.hm-empty {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+/* Past — pink ramp */
+.hm-p1 { background: #F4C0D1; }
+.hm-p2 { background: #ED93B1; }
+.hm-p3 { background: #D4537E; }
+.hm-p4 { background: #993556; }
+
+/* Future — gray ramp */
+.hm-g1 { background: #D3D1C7; }
+.hm-g2 { background: #B4B2A9; }
+.hm-g3 { background: #888780; }
+
+/* Today outline */
+.hm-today {
+  outline: 2px solid var(--color-border-primary);
+  outline-offset: 1px;
+}
+
+/* Footer row */
+.hm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Legend */
+.hm-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+.hm-divider {
+  width: 1px;
+  height: 10px;
+  background: var(--color-border-tertiary);
+  margin: 0 3px;
+}
+
+/* Stats */
+.hm-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.hm-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.hm-stat-val {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+.hm-stat-lbl {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+

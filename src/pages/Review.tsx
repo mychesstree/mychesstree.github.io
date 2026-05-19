@@ -300,7 +300,7 @@ export default function Review() {
           <h2>Review Complete!</h2>
           <p className="text-muted" style={{ marginTop: '0.5rem' }}>You've reviewed all available moves for this session.</p>
           <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'center' }}>
-            <button onClick={() => navigate('/')} className="btn btn-secondary">Dashboard</button>
+            <button onClick={() => navigate('/dashboard')} className="btn btn-secondary">Dashboard</button>
             <button onClick={() => loadTreeAndGenerateCards()} className="btn">Start Over</button>
           </div>
         </div>

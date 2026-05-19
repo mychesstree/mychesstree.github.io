@@ -5,6 +5,7 @@ import { useSubscription } from '../hooks/useSubscription';
 import { useToast } from '../components/Toast';
 import { createCheckoutSession, createCustomerPortalSession } from '../lib/stripe';
 import LoadingScreen from '../components/LoadingScreen';
+import SEO from '../components/SEO';
 
 interface Plan {
   id: string;
@@ -105,6 +106,29 @@ export default function Pricing() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <SEO
+        title="Pricing | chesstr.ee Chess Opening Trainer"
+        description="Compare chesstr.ee plans for chess opening repertoire training, cloud opening trees, PGN import, and spaced repetition review."
+        path="/#/pricing"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: 'chesstr.ee Pro',
+          description: 'A paid plan for chess players who want more cloud opening trees and deeper chess repertoire study.',
+          image: 'https://chesstr.ee/demo.png',
+          brand: {
+            '@type': 'Brand',
+            name: 'chesstr.ee',
+          },
+          offers: {
+            '@type': 'Offer',
+            price: '30',
+            priceCurrency: 'USD',
+            availability: 'https://schema.org/InStock',
+            url: 'https://chesstr.ee/#/pricing',
+          },
+        }}
+      />
       <LoadingScreen isLoading={loading} />
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'white' }}>
