@@ -20,6 +20,7 @@ import { chesscomCache } from '../utils/chesscomCache';
 import { useToast } from '../components/Toast';
 import LoadingScreen from '../components/LoadingScreen';
 import PositionPanel from '../components/PositionPanel';
+import moveSound from '../../public/move.mp3';
 
 // Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
@@ -90,6 +91,8 @@ export default function TreeEditor() {
   const [isLocal, setIsLocal] = useState(false);
   const [showPublicUrlModal, setShowPublicUrlModal] = useState(false);
   const [publicUrlCopied, setPublicUrlCopied] = useState(false);
+
+  const moveAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -656,6 +659,21 @@ export default function TreeEditor() {
     setBestMove('');
   }, [currentFen]);
 
+  useEffect(() => {
+    moveAudioRef.current = new Audio(moveSound);
+    moveAudioRef.current.volume = 0.5;
+
+    return () => {
+      moveAudioRef.current = null;
+    };
+  }, []);
+  const playMoveSound = () => {
+    if (!moveAudioRef.current) return;
+
+    moveAudioRef.current.currentTime = 0;
+    moveAudioRef.current.play().catch(() => { });
+  };
+
   const onPieceDrop = useCallback(
     ({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string }) => {
       const prevFen = gameRef.current.fen();
@@ -668,6 +686,8 @@ export default function TreeEditor() {
         gameRef.current = new Chess(prevFen);
         return false;
       }
+
+      playMoveSound();
 
       const newFen = gameRef.current.fen();
       setCurrentFen(newFen);
@@ -1929,7 +1949,7 @@ export default function TreeEditor() {
                           style={{ width: '100%' }}
                         />
                       </div>
-                      
+
                       <div className="input-group" style={{ flex: '0 0 auto', marginBottom: 0 }}>
                         <label>Month</label>
                         <MonthPicker
@@ -2003,7 +2023,7 @@ export default function TreeEditor() {
                             {selectedChesscomGames.size === chesscomGames.length ? 'Deselect All' : 'Select All'}
                           </button>
                         </div>
-                        
+
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto', marginBottom: '1rem' }}>
                           {chesscomGames.map((game) => (
                             <div
@@ -2666,11 +2686,11 @@ export default function TreeEditor() {
                                     {new Date(entry.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                                   </span>
                                   {entry.variant && entry.variant !== 'chess' && (
-                                    <span style={{ 
-                                      fontSize: '0.7rem', 
-                                      color: 'var(--accent-color)', 
-                                      backgroundColor: 'rgba(236, 72, 153, 0.1)', 
-                                      padding: '0.1rem 0.4rem', 
+                                    <span style={{
+                                      fontSize: '0.7rem',
+                                      color: 'var(--accent-color)',
+                                      backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                                      padding: '0.1rem 0.4rem',
                                       borderRadius: '4px',
                                       fontWeight: 600,
                                       border: '1px solid rgba(236, 72, 153, 0.2)',

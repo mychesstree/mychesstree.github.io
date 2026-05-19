@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
-import { GitBranchPlus, GitBranch, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Info, X, Navigation } from 'lucide-react';
+import { Check, Copy, GitBranchPlus, GitBranch, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Info, X, Navigation } from 'lucide-react';
 import TooltipButton from './TooltipButton';
 import { findParentWithMultipleChildren, countNodes } from '../utils/treeUtils';
 import { getOpeningName, isTheoryPosition, useOpeningTheory } from '../utils/openingTheory';
@@ -31,22 +31,22 @@ type Quality = TreeNode['quality'];
 const QUALITY_COLOR: Record<NonNullable<Quality>, string> = {
   blunder: '#ef4444',   // red
   mistake: '#f97316',   // light red / orange-red
-  good:    '#ec4899',   // pink
-  great:   '#ff006e',   // hot pink
+  good: '#ec4899',   // pink
+  great: '#ff006e',   // hot pink
 };
 
 const QUALITY_LABEL: Record<NonNullable<Quality>, string> = {
   blunder: '??',
   mistake: '?',
-  good:    '!',
-  great:   '!!',
+  good: '!',
+  great: '!!',
 };
 
 const QUALITY_TOOLTIP: Record<NonNullable<Quality>, string> = {
   blunder: 'Blunder (??)',
   mistake: 'Mistake (?)',
-  good:    'Good Move (!)',
-  great:   'Great Move (!!)',
+  good: 'Good Move (!)',
+  great: 'Great Move (!!)',
 };
 
 function qualityNodeColor(quality?: Quality): string | null {
@@ -68,6 +68,28 @@ function pathToNode(root: TreeNode, targetFen: string): Set<string> {
   }
   dfs(root);
   return new Set(path);
+}
+
+function extractPgnToNode(root: TreeNode, targetFen: string): string {
+  const path: TreeNode[] = [];
+  function dfs(node: TreeNode): boolean {
+    path.push(node);
+    if (node.fen === targetFen) return true;
+    for (const child of node.children) {
+      if (dfs(child)) return true;
+    }
+    path.pop();
+    return false;
+  }
+  dfs(root);
+  // Build PGN: skip root (no move), then pair moves with numbers
+  const moves = path.slice(1).map(n => n.move ?? '').filter(Boolean);
+  const tokens: string[] = [];
+  moves.forEach((move, i) => {
+    if (i % 2 === 0) tokens.push(`${Math.floor(i / 2) + 1}.`);
+    tokens.push(move);
+  });
+  return tokens.join(' ');
 }
 
 function findNodeByFen(node: TreeNode, targetFen: string): TreeNode | null {
@@ -94,7 +116,7 @@ function findParentByFen(node: TreeNode, targetFen: string, parent: TreeNode | n
  */
 function computeTreeLayout(
   root: TreeNode,
-  
+
   containerHeight: number,
   visibleFens: Set<string>
 ): Map<string, { x: number; y: number }> {
@@ -145,6 +167,7 @@ export default function ForceTree({
   const [nodeDescription, setNodeDescription] = useState('');
   const [nodeQuality, setNodeQuality] = useState<Quality>(undefined);
   const [navMenuExpanded, setNavMenuExpanded] = useState(false);
+  const [copied, setCopied] = useState<'fen' | 'pgn' | null>(null);
 
   const currentTree = tempTreeData || data;
   const activePath = useMemo(() => pathToNode(data, currentFen), [data, currentFen]);
@@ -156,7 +179,7 @@ export default function ForceTree({
     onNodeClick({ fen: target.fen, move: target.move || 'Start' });
   }, [onNodeClick]);
 
-  const navigateLeft  = useCallback(() => navigateToNode(findParentByFen(currentTree, currentFen)), [currentTree, currentFen, navigateToNode]);
+  const navigateLeft = useCallback(() => navigateToNode(findParentByFen(currentTree, currentFen)), [currentTree, currentFen, navigateToNode]);
   const navigateRight = useCallback(() => navigateToNode(currentNode?.children[0]), [currentNode, navigateToNode]);
 
   const navigateUp = useCallback(() => {
@@ -231,10 +254,10 @@ export default function ForceTree({
 
     function buildGraph(node: TreeNode, parentFen: string | null = null, depth = 0) {
       if (!visibleFens.has(node.fen)) return;
-      const onPath   = activePath.has(node.fen);
-      const isTemp   = tempFens.has(node.fen);
+      const onPath = activePath.has(node.fen);
+      const isTemp = tempFens.has(node.fen);
       const isTheory = isTheoryPosition(node.fen);
-      const quality  = qualityMap.get(node.fen);
+      const quality = qualityMap.get(node.fen);
       const pos = treePositions.get(node.fen) ?? { x: depth * 160 + 80, y: height / 2 };
 
       if (!nodeMap.has(node.fen)) {
@@ -388,14 +411,14 @@ export default function ForceTree({
       .attr('fill', '#fff').attr('pointer-events', 'none')
       .style('text-shadow', '0 1px 2px rgba(0,0,0,0.8)');
 
-    
+
     // 7. Drag
     node.call(d3.drag<SVGGElement, any>()
-      .on('start', function(_e, d) {
+      .on('start', function (_e, d) {
         d.dragging = true;
         (this.parentNode as Element)?.appendChild(this);
       })
-      .on('drag', function(e, d) {
+      .on('drag', function (e, d) {
         d.x = e.x; d.y = e.y;
         d3.select(this).attr('transform', `translate(${d.x},${d.y})`);
         link
@@ -405,7 +428,7 @@ export default function ForceTree({
           .attr('x2', (l: any) => l.target === d.id ? d.x : posLookup.get(l.target)?.x ?? 0)
           .attr('y2', (l: any) => l.target === d.id ? d.y : posLookup.get(l.target)?.y ?? 0);
       })
-      .on('end', function(_e, d) {
+      .on('end', function (_e, d) {
         d.dragging = false;
         d3.select(this).transition().duration(500).ease(d3.easeElasticOut.amplitude(1).period(0.4))
           .attr('transform', `translate(${d.homeX},${d.homeY})`);
@@ -425,7 +448,7 @@ export default function ForceTree({
     const SPEED = 0.0008;
     let rafId: number;
     const tick = (t: number) => {
-      node.each(function(d: any) {
+      node.each(function (d: any) {
         if (d.dragging) return;
         d.x = d.homeX + Math.sin(t * SPEED + d.phaseX) * AMPLITUDE;
         d.y = d.homeY + Math.cos(t * SPEED * 0.7 + d.phaseY) * AMPLITUDE;
@@ -447,7 +470,7 @@ export default function ForceTree({
   const centerOnFen = useCallback((fen: string) => {
     if (!svgRef.current || !containerRef.current) return;
     const el = svgRef.current;
-    const containerWidth  = isFullscreen ? window.innerWidth  : (containerRef.current.clientWidth  || 600);
+    const containerWidth = isFullscreen ? window.innerWidth : (containerRef.current.clientWidth || 600);
     const containerHeight = isFullscreen ? window.innerHeight : (containerRef.current.clientHeight || 500);
     const nodeEl = d3.select(el).selectAll<SVGGElement, any>('g').filter((d: any) => d && d.fen === fen);
     if (nodeEl.size() === 0) return;
@@ -473,7 +496,7 @@ export default function ForceTree({
     const handleKeyDown = (event: KeyboardEvent) => {
       const map: Record<string, () => void> = {
         ArrowLeft: navigateLeft, ArrowRight: navigateRight,
-        ArrowUp: navigateUp,    ArrowDown: navigateDown,
+        ArrowUp: navigateUp, ArrowDown: navigateDown,
       };
       const fn = map[event.key];
       if (fn) { event.preventDefault(); event.stopPropagation(); fn(); }
@@ -506,7 +529,7 @@ export default function ForceTree({
           return (
             <div style={{
               display: 'flex', alignItems: 'center', gap: '0.5rem',
-              background: 'rgba(0,0,0,0.5)', padding: '2px 8px 2px 2px',
+              background: 'rgba(0,0,0,0.5)', padding: '2px 2px 2px 2px',
               borderRadius: '6px',
               border: `1px solid ${currentNode?.quality ? QUALITY_COLOR[currentNode.quality] : 'var(--border-color)'}`,
               height: 40,
@@ -528,7 +551,7 @@ export default function ForceTree({
                 <Info size={20} color={infoIconColor} />
               </TooltipButton>
               {displayTitle && (
-                <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: '600', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '4px' }}>
+                <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: '600', maxWidth: '2000px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '14px' }}>
                   {displayTitle}
                 </span>
               )}
@@ -554,10 +577,10 @@ export default function ForceTree({
         {navMenuExpanded && (
           <div style={{ position: 'absolute', bottom: 48, right: 0, width: 120, height: 120 }}>
             {([
-              { tooltip: 'Navigate Up',    onClick: navigateUp,    Icon: ChevronUp,    style: { top: 42, left: '50%', transform: 'translateX(-50%)' } },
-              { tooltip: 'Navigate Left',  onClick: navigateLeft,  Icon: ChevronLeft,  style: { bottom: 0, left: 0 } },
+              { tooltip: 'Navigate Up', onClick: navigateUp, Icon: ChevronUp, style: { top: 42, left: '50%', transform: 'translateX(-50%)' } },
+              { tooltip: 'Navigate Left', onClick: navigateLeft, Icon: ChevronLeft, style: { bottom: 0, left: 0 } },
               { tooltip: 'Navigate Right', onClick: navigateRight, Icon: ChevronRight, style: { bottom: 0, right: 0 } },
-              { tooltip: 'Navigate Down',  onClick: navigateDown,  Icon: ChevronDown,  style: { bottom: 0, left: '50%', transform: 'translateX(-50%)' } },
+              { tooltip: 'Navigate Down', onClick: navigateDown, Icon: ChevronDown, style: { bottom: 0, left: '50%', transform: 'translateX(-50%)' } },
             ] as const).map(({ tooltip, onClick, Icon, style }) => (
               <TooltipButton key={tooltip} tooltip={`${tooltip} (Arrow key)`} onClick={onClick} className="btn btn-secondary"
                 style={{ position: 'absolute', ...style, padding: 0, width: 36, height: 36, background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid var(--border-color)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -592,39 +615,119 @@ export default function ForceTree({
               <X size={24} />
             </button>
 
-            <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Info size={20} color={nodeQuality ? QUALITY_COLOR[nodeQuality] : 'var(--accent-color)'} />
-              Node Information
-            </h3>
+             {/* Export: FEN + PGN */}
+              <div
+                style={{
+                  paddingBottom: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem',
+                }}
+              >
+
+                {/* Action Buttons */}
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '0.75rem',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  {/* Copy FEN */}
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(currentFen);
+                      setCopied('fen');
+                      setTimeout(() => setCopied(null), 1800);
+                    }}
+                    className="btn btn-secondary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.65rem 0.9rem',
+                      borderRadius: 'var(--radius-lg)',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      minWidth: 120,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {copied === 'fen' ? (
+                      <>
+                        <Check size={16} />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={16} />
+                        FEN
+                      </>
+                    )}
+                  </button>
+
+                  {/* Copy PGN */}
+                  {(() => {
+                    const pgn = extractPgnToNode(data, currentFen);
+
+                    return pgn ? (
+                      <button
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(pgn);
+                          setCopied('pgn');
+                          setTimeout(() => setCopied(null), 1800);
+                        }}
+                        className="btn btn-secondary"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          padding: '0.65rem 0.9rem',
+                          borderRadius: 'var(--radius-lg)',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          minWidth: 120,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {copied === 'pgn' ? (
+                          <>
+                            <Check size={16} />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={16} />
+                            PGN
+                          </>
+                        )}
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {/* Title */}
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                  Title (max 20 characters)
-                </label>
                 <input type="text" value={nodeTitle} onChange={e => setNodeTitle(e.target.value.slice(0, 20))}
                   placeholder="Enter node title..."
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', backgroundColor: 'var(--surface)', color: 'var(--text)' }}
                   maxLength={20} />
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{nodeTitle.length}/20</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem', textAlign: 'right', transform: 'translate(-12px, -32px)', position: 'absolute', right: 20 }}>{nodeTitle.length}/20</div>
               </div>
 
               {/* Description */}
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                  Description (max 100 characters)
-                </label>
                 <textarea value={nodeDescription} onChange={e => setNodeDescription(e.target.value.slice(0, 100))}
                   placeholder="Enter node description..."
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', fontSize: '0.9rem', minHeight: '80px', resize: 'vertical', backgroundColor: 'var(--surface)', color: 'var(--text)' }}
                   maxLength={100} />
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{nodeDescription.length}/100</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem', textAlign: 'right', transform: 'translate(-12px, -32px)', position: 'absolute', right: 20 }}>{nodeDescription.length}/100</div>
               </div>
 
-              {/* Save row: quality buttons on left, Save on right */}
+              {/* Save row: quality buttons left, Save right */}
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
-                {/* Quality toggle buttons */}
                 {(['blunder', 'mistake', 'good', 'great'] as NonNullable<Quality>[]).map(q => {
                   const isActive = nodeQuality === q;
                   return (
@@ -644,7 +747,6 @@ export default function ForceTree({
                         borderRadius: 'var(--radius-md)',
                         transition: 'all 0.15s ease',
                         flexShrink: 0,
-                        // subtle glow when active
                         boxShadow: isActive ? `0 0 8px ${QUALITY_COLOR[q]}88` : 'none',
                       }}
                     >
@@ -652,11 +754,7 @@ export default function ForceTree({
                     </TooltipButton>
                   );
                 })}
-
-                {/* Spacer */}
                 <div style={{ flex: 1 }} />
-
-                {/* Save */}
                 <button
                   onClick={() => {
                     if (onNodeUpdate) {

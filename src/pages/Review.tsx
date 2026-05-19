@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle, XCircle, Brain } from 'lucide-react';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
 import { useAuth } from '../hooks/useAuth';
 import LoadingScreen from '../components/LoadingScreen';
+import moveSound from '../../public/move.mp3';
 
 interface TreeNode {
   fen: string;
@@ -75,6 +76,23 @@ export default function Review() {
   const navigate = useNavigate();
   const { isGuest, getGuestTree, loadGuestReviews, saveGuestReview } = useAuth();
   const [treeMeta, setTreeMeta] = useState<any>(null);
+  const moveAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    moveAudioRef.current = new Audio(moveSound);
+    moveAudioRef.current.volume = 0.5;
+
+    return () => {
+      moveAudioRef.current = null;
+    };
+  }, []);
+
+  const playMoveSound = () => {
+    if (!moveAudioRef.current) return;
+
+    moveAudioRef.current.currentTime = 0;
+    moveAudioRef.current.play().catch(() => { });
+  };
 
   const gameRef = useRef(new Chess());
   const [currentFen, setCurrentFen] = useState(() => gameRef.current.fen());
@@ -176,6 +194,8 @@ export default function Review() {
     try {
       const moveObj = gameRef.current.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
       if (!moveObj) return false;
+
+      playMoveSound();
 
       setCurrentFen(gameRef.current.fen());
       const currentCard = flashcards[currentIndex];
