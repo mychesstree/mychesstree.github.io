@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import ForceTree from '../components/ForceTree';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
-import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu, Eye, Pencil, Globe, GlobeLock, Copy, Maximize, HardDrive } from 'lucide-react';
+import { ArrowLeft, Save, X, Share2, Trash2, Users, Import, Menu, Eye, Pencil, Globe, GlobeLock, Copy, Maximize } from 'lucide-react';
 import TooltipButton from '../components/TooltipButton';
 import MonthPicker from '../components/MonthPicker';
 import { calientePieces, boardStyles } from '../lib/chessAssets';
@@ -21,6 +21,7 @@ import { useToast } from '../components/Toast';
 import LoadingScreen from '../components/LoadingScreen';
 import PositionPanel from '../components/PositionPanel';
 import moveSound from '../../public/move.mp3';
+import captureSound from '../../public/capture.mp3';
 
 // Component ─────────────────────────────────────────────────────────────────
 export default function TreeEditor() {
@@ -93,6 +94,7 @@ export default function TreeEditor() {
   const [publicUrlCopied, setPublicUrlCopied] = useState(false);
 
   const moveAudioRef = useRef<HTMLAudioElement | null>(null);
+  const captureAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Chess Ref
   const gameRef = useRef(new Chess());
@@ -163,6 +165,7 @@ export default function TreeEditor() {
           const nextNode = currentNode.children[0];
           gameRef.current = new Chess(nextNode.fen);
           setCurrentFen(nextNode.fen);
+          playMoveSound();
         } else if (importedBranch && importedBranch.children.length > 0) {
           // Check if we're in an imported branch and find next node
           const findInImportedBranch = (node: TreeNode, targetFen: string): TreeNode | null => {
@@ -278,6 +281,7 @@ export default function TreeEditor() {
             // Go to next sibling (wrap around)
             nextIndex = currentChildIndex === parent.children.length - 1 ? 0 : currentChildIndex + 1;
           }
+          playMoveSound();
 
           const nextSibling = parent.children[nextIndex];
           gameRef.current = new Chess(nextSibling.fen);
@@ -614,31 +618,6 @@ export default function TreeEditor() {
     }
   };
 
-  const toggleLocal = async () => {
-    const newLocalStatus = !isLocal;
-
-    if (isGuest) {
-      // Guest trees are always local — just flip the UI state
-      setIsLocal(newLocalStatus);
-      return;
-    }
-
-    if (!id || !user) return;
-
-    const { error } = await supabase
-      .from('trees')
-      .update({
-        is_local: newLocalStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
-
-    if (!error) {
-      setIsLocal(newLocalStatus);
-      setTreeMeta((prev: any) => prev ? { ...prev, is_local: newLocalStatus } : null);
-    }
-  };
-
   const copyPublicUrl = async () => {
     const publicUrl = `${window.location.origin}/#/editor/${id}`;
     try {
@@ -662,16 +641,20 @@ export default function TreeEditor() {
   useEffect(() => {
     moveAudioRef.current = new Audio(moveSound);
     moveAudioRef.current.volume = 0.5;
+    captureAudioRef.current = new Audio(captureSound);
+    captureAudioRef.current.volume = 0.5;
 
     return () => {
       moveAudioRef.current = null;
+      captureAudioRef.current = null;
     };
   }, []);
-  const playMoveSound = () => {
-    if (!moveAudioRef.current) return;
+  const playMoveSound = (isCapture: boolean = false) => {
+    const audioRef = isCapture ? captureAudioRef : moveAudioRef;
+    if (!audioRef.current) return;
 
-    moveAudioRef.current.currentTime = 0;
-    moveAudioRef.current.play().catch(() => { });
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch(() => { });
   };
 
   const onPieceDrop = useCallback(
@@ -687,7 +670,7 @@ export default function TreeEditor() {
         return false;
       }
 
-      playMoveSound();
+      playMoveSound(!!moveObj.captured);
 
       const newFen = gameRef.current.fen();
       setCurrentFen(newFen);
@@ -1558,40 +1541,6 @@ export default function TreeEditor() {
                     </p>
                   </div>
                 )}
-                {/* Local Mode Toggle */}
-                {!viewOnly && !isGuest && (
-                  <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <HardDrive size={16} color={isLocal ? 'var(--accent-color)' : 'var(--text-muted)'} />
-                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Local Mode</span>
-                        {isLocal && (
-                          <span style={{ fontSize: '0.7rem', backgroundColor: 'rgba(245,11,11,0.15)', color: 'var(--accent-color)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>ON</span>
-                        )}
-                      </div>
-                      <button
-                        onClick={toggleLocal}
-                        className={`btn ${isLocal ? '' : 'btn-secondary'}`}
-                        style={{
-                          padding: '0.4rem 0.8rem',
-                          fontSize: '0.8rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                        }}
-                      >
-                        <HardDrive size={14} />
-                        {isLocal ? 'Disable' : 'Enable'}
-                      </button>
-                    </div>
-                    <p className="text-muted text-sm" style={{ margin: 0, lineHeight: 1.5 }}>
-                      {isLocal
-                        ? `Local mode: tree saved locally and less restrictions.`
-                        : `Enable local mode to bypass the ${isPro() ? '36' : '24'}-move depth limit for this tree.`}
-                    </p>
-                  </div>
-                )}
-
                 {/* Existing Shares List */}
                 {user?.id === treeMeta.user_id && (
                   <div style={{ marginTop: '2rem' }}>

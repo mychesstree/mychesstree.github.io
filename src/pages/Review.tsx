@@ -8,6 +8,7 @@ import { calientePieces, boardStyles } from '../lib/chessAssets';
 import { useAuth } from '../hooks/useAuth';
 import LoadingScreen from '../components/LoadingScreen';
 import moveSound from '../../public/move.mp3';
+import captureSound from '../../public/capture.mp3';
 
 interface TreeNode {
   fen: string;
@@ -77,21 +78,26 @@ export default function Review() {
   const { isGuest, getGuestTree, loadGuestReviews, saveGuestReview } = useAuth();
   const [treeMeta, setTreeMeta] = useState<any>(null);
   const moveAudioRef = useRef<HTMLAudioElement | null>(null);
+  const captureAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     moveAudioRef.current = new Audio(moveSound);
     moveAudioRef.current.volume = 0.5;
+    captureAudioRef.current = new Audio(captureSound);
+    captureAudioRef.current.volume = 0.5;
 
     return () => {
       moveAudioRef.current = null;
+      captureAudioRef.current = null;
     };
   }, []);
 
-  const playMoveSound = () => {
-    if (!moveAudioRef.current) return;
+  const playMoveSound = (isCapture: boolean) => {
+    const audioRef = isCapture ? captureAudioRef : moveAudioRef;
+    if (!audioRef.current) return;
 
-    moveAudioRef.current.currentTime = 0;
-    moveAudioRef.current.play().catch(() => { });
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch(() => { });
   };
 
   const gameRef = useRef(new Chess());
@@ -195,7 +201,7 @@ export default function Review() {
       const moveObj = gameRef.current.move({ from: sourceSquare, to: targetSquare, promotion: 'q' });
       if (!moveObj) return false;
 
-      playMoveSound();
+      playMoveSound(!!moveObj.captured);
 
       setCurrentFen(gameRef.current.fen());
       const currentCard = flashcards[currentIndex];

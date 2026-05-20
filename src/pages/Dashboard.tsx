@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useMobile } from '../hooks/useMobile';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreVertical, Trash2, HelpCircle } from 'lucide-react';
+import { Plus, GitMerge, LayoutGrid, Search, AlertCircle, Download, Upload, X, MoreVertical, Trash2, HelpCircle, HardDrive } from 'lucide-react';
 import StarButton from '../components/StarButton';
 import TooltipButton from '../components/TooltipButton';
 import ReviewHeatmap from '../components/ReviewHeatmap';
@@ -28,6 +28,7 @@ interface Tree {
   star_count?: number;
   is_starred?: boolean;
   is_public?: boolean;
+  is_local?: boolean;
   users?: {
     username: string;
   } | {
@@ -368,6 +369,39 @@ export default function Dashboard() {
       } else {
         showError('Failed to delete tree');
       }
+    }
+  };
+
+  const toggleLocal = async (treeId: string, currentLocalStatus: boolean) => {
+    const newLocalStatus = !currentLocalStatus;
+
+    if (isGuest) {
+      // Guest trees are always local — just flip the UI state
+      const guestTrees = loadGuestTrees();
+      const updatedTrees = guestTrees.map(t => 
+        t.id === treeId ? { ...t, is_local: newLocalStatus } : t
+      );
+      localStorage.setItem('chesstr.ee_guest_trees', JSON.stringify(updatedTrees));
+      setTrees(updatedTrees);
+      return;
+    }
+
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('trees')
+      .update({
+        is_local: newLocalStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', treeId);
+
+    if (!error) {
+      setTrees(prev => prev.map(t =>
+        t.id === treeId ? { ...t, is_local: newLocalStatus } : t
+      ));
+    } else {
+      showError('Failed to update local mode');
     }
   };
 
@@ -901,6 +935,46 @@ export default function Dashboard() {
                                   marginBottom: '4px'
                                 }}>
                                   Created: {new Date(tree.created_at).toLocaleDateString()}
+                                </div>
+                                <div
+                                  style={{
+                                    padding: '8px 16px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '8px',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => toggleLocal(tree.id, tree.is_local || false)}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <HardDrive size={14} color={tree.is_local ? 'var(--accent-color)' : 'var(--text-muted)'} />
+                                    <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>Local Mode</span>
+                                  </div>
+                                  <div
+                                    style={{
+                                      width: '36px',
+                                      height: '20px',
+                                      borderRadius: '10px',
+                                      backgroundColor: tree.is_local ? 'var(--accent-color)' : 'var(--border-color)',
+                                      position: 'relative',
+                                      cursor: 'pointer',
+                                      transition: 'background-color 0.2s'
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        backgroundColor: '#fff',
+                                        position: 'absolute',
+                                        top: '2px',
+                                        left: tree.is_local ? '18px' : '2px',
+                                        transition: 'left 0.2s'
+                                      }}
+                                    />
+                                  </div>
                                 </div>
                                 <button
                                   onClick={() => {
