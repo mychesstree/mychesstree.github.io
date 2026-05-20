@@ -1,0 +1,16 @@
+{
+  "name": "chesstr.ee",
+  "short_name": "chesstr.ee",
+  "description": "Chess opening repertoire trainer with visual trees and spaced repetition review.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#f50b0b",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
